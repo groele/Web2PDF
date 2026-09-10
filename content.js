@@ -1,5 +1,5 @@
 /**
- * 网页区域 PDF 导出器 - Content Script (v2.4.0 通用高保真版)
+ * 网页区域 PDF 导出器 - Content Script (v2.6.0 通用高保真版)
  */
 
 (function () {
@@ -13,6 +13,7 @@
   // 默认开启 PNG 无损位图输出
   let currentLosslessPng = true;
 
+  let currentOutputFormat = 'pdf';
   // A canvas needs four bytes per pixel before image encoding.  Keeping this
   // bounded prevents a long article from exhausting the tab's memory.
   const MAX_RENDER_PIXELS = 48 * 1024 * 1024;
@@ -26,6 +27,15 @@
         if (res.wos_export_mode) currentExportMode = res.wos_export_mode;
         if (res.wos_resolution_scale) currentResolutionScale = parseFloat(res.wos_resolution_scale);
         if (res.wos_lossless_png !== undefined) currentLosslessPng = !!res.wos_lossless_png;
+        updateFloatingBadge();
+      }
+    });
+  }
+
+  if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+    chrome.storage.local.get(['wos_output_format'], (res) => {
+      if (res?.wos_output_format && ['pdf', 'png', 'jpeg'].includes(res.wos_output_format)) {
+        currentOutputFormat = res.wos_output_format;
         updateFloatingBadge();
       }
     });
@@ -190,6 +200,23 @@
   }
 
   // --- 高保真直出 PDF 引擎 ---
+  async function downloadCanvasAsImage(canvas, fileName, outputFormat) {
+    const isPng = outputFormat === 'png';
+    const mimeType = isPng ? 'image/png' : 'image/jpeg';
+    const extension = isPng ? 'png' : 'jpg';
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, mimeType, isPng ? undefined : 0.96));
+    if (!blob) throw new Error('无法编码图片');
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${fileName.replace(/\.pdf$/i, '')}.${extension}`;
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
   async function exportElementToPdf(targetElement, options = {}) {
     if (!targetElement) {
       showToast('🎯 请在网页上点击想要导出的区域', 'info', 3000);
@@ -211,6 +238,7 @@
     const requestedScale = Number(options.resolutionScale || currentResolutionScale || 3.0);
     const scale = getSafeScale(targetElement, requestedScale);
     const mode = options.exportMode || currentExportMode || 'a4';
+    const outputFormat = ['pdf', 'png', 'jpeg'].includes(options.outputFormat) ? options.outputFormat : 'pdf';
     const usePng = options.losslessPng !== undefined ? options.losslessPng : currentLosslessPng;
     let format = usePng ? 'PNG' : 'JPEG';
     let mimeType = usePng ? 'image/png' : 'image/jpeg';
@@ -259,6 +287,12 @@
       restoreExtensionUi = () => {};
 
       const fileName = getCleanFileName();
+      if (outputFormat !== 'pdf') {
+        await downloadCanvasAsImage(canvas, fileName, outputFormat);
+        showToast(`✅ ${outputFormat.toUpperCase()} 图片已生成并开始下载`, 'success', 3000);
+        return;
+      }
+
 
       // PNG is lossless but can make a long document several hundred MB. Keep
       // it for normal captures and switch very large captures to high-quality
@@ -500,6 +534,10 @@
   }
 
   // --- 悬浮操作胶囊更新 ---
+  function getOutputLabel() {
+    return currentOutputFormat === 'pdf' ? 'PDF' : currentOutputFormat.toUpperCase();
+  }
+
   function updateFloatingBadge() {
     const badge = document.getElementById('wos-quick-badge');
     if (badge) {
@@ -507,7 +545,6 @@
       badge.textContent = `${currentResolutionScale}x · ${modeText}`;
     }
   }
-
   function initFloatingWidget() {
     if (document.getElementById('wos-pdf-floating-widget')) return;
 
@@ -558,7 +595,8 @@
       startSmartPreview({
         resolutionScale: currentResolutionScale,
         exportMode: currentExportMode,
-        losslessPng: currentLosslessPng
+        losslessPng: currentLosslessPng,
+        outputFormat: currentOutputFormat,
       });
     });
 
@@ -567,7 +605,8 @@
       startElementPicker({
         resolutionScale: currentResolutionScale,
         exportMode: currentExportMode,
-        losslessPng: currentLosslessPng
+        losslessPng: currentLosslessPng,
+        outputFormat: currentOutputFormat,
       });
     });
 
@@ -615,7 +654,8 @@
         isWos,
         currentMode: currentExportMode,
         currentScale: currentResolutionScale,
-        losslessPng: currentLosslessPng
+        losslessPng: currentLosslessPng,
+        outputFormat: currentOutputFormat,
       });
     }
     return true;

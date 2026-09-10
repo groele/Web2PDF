@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title>Web Region PDF Exporter</title>
+  <rect width="512" height="512" rx="112" fill="#0F172A"/>
+  <rect x="68" y="68" width="376" height="376" rx="84" fill="#172554"/>
+  <path d="M184 118h112l72 72v190c0 18-14 32-32 32H184c-18 0-32-14-32-32V150c0-18 14-32 32-32Z" fill="#F8FAFC"/>
+  <path d="M296 118v60c0 18 14 32 32 32h40" fill="#DBEAFE"/>
+  <path d="M204 250h104M204 290h104M204 330h60" stroke="#94A3B8" stroke-width="18" stroke-linecap="round"/>
+  <path d="M116 236v-44c0-18 14-32 32-32h44M396 236v-44c0-18-14-32-32-32h-44M116 276v44c0 18 14 32 32 32h44M396 276v44c0 18-14 32-32 32h-44" fill="none" stroke="#3B82F6" stroke-width="24" stroke-linecap="round"/>
+  <circle cx="362" cy="362" r="58" fill="#F97316" stroke="#0F172A" stroke-width="12"/>
+  <path d="M362 326v52m0 0-22-22m22 22 22-22M334 394h56" fill="none" stroke="#FFF7ED" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

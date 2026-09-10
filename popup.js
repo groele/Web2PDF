@@ -1,5 +1,5 @@
 /**
- * 网页区域 PDF 导出器 - Popup Logic (v2.4.0)
+ * 网页区域 PDF 导出器 - Popup Logic (v2.6.0)
  */
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -12,10 +12,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   const scaleButtons = document.querySelectorAll('#scale-segmented .seg-item');
   const modeButtons = document.querySelectorAll('#mode-segmented .seg-item');
 
+  const formatButtons = document.querySelectorAll('#format-segmented .seg-item');
+  const pdfOnlyRows = [modeButtons[0]?.closest('.config-row'), optLosslessPng.closest('.toggle-row')];
   let currentScale = 3.0;
   let currentExportMode = 'a4';
   let currentLosslessPng = true;
 
+  let currentOutputFormat = 'pdf';
   function setScale(val, save = false) {
     currentScale = val;
     dpiBadge.textContent = `${val}× ${val === 3 ? '推荐' : '渲染'}`;
@@ -49,6 +52,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
+  function setOutputFormat(format, save = false) {
+    currentOutputFormat = ['pdf', 'png', 'jpeg'].includes(format) ? format : 'pdf';
+    formatButtons.forEach(btn => btn.classList.toggle('active', btn.dataset.format === currentOutputFormat));
+    pdfOnlyRows.forEach(row => { if (row) row.hidden = currentOutputFormat !== 'pdf'; });
+    if (save && chrome.storage?.local) chrome.storage.local.set({ wos_output_format: currentOutputFormat });
+  }
+
   // 分辨率段选切换
   scaleButtons.forEach(btn => {
     btn.addEventListener('click', () => {
@@ -69,11 +79,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (chrome.storage && chrome.storage.local) {
       chrome.storage.local.set({ wos_lossless_png: currentLosslessPng });
     }
+  formatButtons.forEach(btn => {
+    btn.addEventListener('click', () => setOutputFormat(btn.dataset.format, true));
+  });
+
   });
 
   // Read preferences before enabling actions so the first click cannot export
   // with a stale default setting.
   if (chrome.storage && chrome.storage.local) {
+    const outputPrefs = await chrome.storage.local.get(['wos_output_format']);
+    if (outputPrefs.wos_output_format) setOutputFormat(outputPrefs.wos_output_format);
+
     const res = await chrome.storage.local.get(['wos_resolution_scale', 'wos_export_mode', 'wos_lossless_png']);
     if (res) {
       if (res.wos_resolution_scale) setScale(parseFloat(res.wos_resolution_scale));
@@ -82,6 +99,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         currentLosslessPng = !!res.wos_lossless_png;
         optLosslessPng.checked = currentLosslessPng;
       }
+      if (res.wos_output_format) setOutputFormat(res.wos_output_format);
     }
   }
 
@@ -135,6 +153,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         action: 'preview_smart',
         options: {
           resolutionScale: currentScale,
+          outputFormat: currentOutputFormat,
           exportMode: currentExportMode,
           losslessPng: currentLosslessPng
         }
@@ -153,6 +172,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         action: 'start_picker',
         options: {
           resolutionScale: currentScale,
+          outputFormat: currentOutputFormat,
           exportMode: currentExportMode,
           losslessPng: currentLosslessPng
         }

@@ -1,6 +1,31 @@
 # Changelog
 
 ## v2.4.0 - 2026-09-10
+## v2.6.0 - 2026-09-10
+
+### Added
+
+- Applied the saved PDF, PNG, or JPEG format preference to the Web of Science floating controls.
+- Added a clear guidance note for heuristic automatic content recognition.
+
+### Fixed
+
+- Kept exported image format consistent between the popup and in-page export entry points.
+
+
+## v2.5.0 - 2026-09-10
+
+### Added
+
+- Added direct PNG and JPEG export at the selected 2x, 3x, or 4x render scale.
+- Added a persistent output-format selector in the popup.
+- Added a new source SVG and regenerated 16px, 48px, and 128px extension icons.
+
+### Changed
+
+- Hide PDF-only layout controls while exporting an image.
+
+
 
 ### Added
 

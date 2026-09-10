@@ -22,7 +22,7 @@
         </div>
         <div class="title-wrap">
           <h1>网页区域 PDF 导出器</h1>
-          <span class="version-badge">v2.4.0</span>
+          <span class="version-badge">v2.6.0</span>
         </div>
       </div>
       <div id="page-status" class="page-status">
@@ -66,6 +66,16 @@
 
     <!-- 快捷配置面板 -->
     <div class="config-card">
+      <!-- 输出类型 -->
+      <div class="config-row">
+        <div class="config-label"><span>导出格式</span></div>
+        <div class="segmented-control output-control" id="format-segmented">
+          <button type="button" class="seg-item active" data-format="pdf">PDF 文档</button>
+          <button type="button" class="seg-item" data-format="png">PNG 图片</button>
+          <button type="button" class="seg-item" data-format="jpeg">JPEG 图片</button>
+        </div>
+      </div>
+
       <!-- 清晰度调节 -->
       <div class="config-row">
         <div class="config-label">
