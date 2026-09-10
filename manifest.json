@@ -1,0 +1,44 @@
+{
+  "manifest_version": 3,
+  "name": "网页区域 PDF 导出器",
+  "short_name": "区域 PDF 导出",
+  "version": "2.4.0",
+  "description": "网页与学术文献区域高保真 PDF 导出：支持自动识别主体、自选区域、自适应清晰度与安全 A4 分页。",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.webofscience.com/*",
+        "*://*.clarivate.com/*"
+      ],
+      "js": [
+        "libs/html2canvas.min.js",
+        "libs/jspdf.umd.min.js",
+        "content.js"
+      ],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage"
+  ],
+  "host_permissions": [
+    "*://*.webofscience.com/*",
+    "*://*.clarivate.com/*"
+  ]
+}

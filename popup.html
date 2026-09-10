@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>网页区域 PDF 导出器</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- 头部 -->
+    <header class="app-header">
+      <div class="logo-group">
+        <div class="logo-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="16" y1="13" x2="8" y2="13"></line>
+            <line x1="16" y1="17" x2="8" y2="13"></line>
+            <polyline points="10 9 9 9 8 9"></polyline>
+          </svg>
+        </div>
+        <div class="title-wrap">
+          <h1>网页区域 PDF 导出器</h1>
+          <span class="version-badge">v2.4.0</span>
+        </div>
+      </div>
+      <div id="page-status" class="page-status">
+        <span class="status-dot"></span>
+        <span id="status-label" class="status-label">就绪</span>
+      </div>
+    </header>
+
+    <!-- 核心操作区 (双智能入口) -->
+    <div class="hero-actions">
+      <!-- 自动识别主体 -->
+      <button id="btn-smart-export" class="hero-btn primary" title="识别推荐导出区域，预览确认后再下载">
+        <div class="btn-icon-box">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+          </svg>
+        </div>
+        <div class="btn-text-group">
+          <span class="btn-main-title">自动识别主体</span>
+          <span class="btn-sub-desc">预览确认后导出 · 避免选错</span>
+        </div>
+      </button>
+
+      <!-- 自由点选导出 -->
+      <button id="btn-pick-export" class="hero-btn secondary" title="在网页上点击任意需要导出的区块">
+        <div class="btn-icon-box">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="22" y1="12" x2="18" y2="12"></line>
+            <line x1="6" y1="12" x2="2" y2="12"></line>
+            <line x1="12" y1="6" x2="12" y2="2"></line>
+            <line x1="12" y1="22" x2="12" y2="18"></line>
+          </svg>
+        </div>
+        <div class="btn-text-group">
+          <span class="btn-main-title">选择页面区块</span>
+          <span class="btn-sub-desc">鼠标悬停点选 · ↑ 扩大范围</span>
+        </div>
+      </button>
+    </div>
+
+    <!-- 快捷配置面板 -->
+    <div class="config-card">
+      <!-- 清晰度调节 -->
+      <div class="config-row">
+        <div class="config-label">
+          <span>分辨率 / 清晰度</span>
+          <span id="dpi-badge" class="badge-accent">3× 推荐</span>
+        </div>
+        <div class="segmented-control" id="scale-segmented">
+          <button type="button" class="seg-item" data-scale="2.0">2x 高清</button>
+          <button type="button" class="seg-item active" data-scale="3.0">3x 超清</button>
+          <button type="button" class="seg-item" data-scale="4.0">4x 极清</button>
+        </div>
+      </div>
+
+      <!-- 排版规格 -->
+      <div class="config-row">
+        <div class="config-label">
+          <span>排版规格</span>
+        </div>
+        <div class="segmented-control" id="mode-segmented">
+          <button type="button" class="seg-item active" data-mode="a4">A4 标准分页</button>
+          <button type="button" class="seg-item" data-mode="continuous">单页无缝长图</button>
+        </div>
+      </div>
+
+      <!-- 无损开关 -->
+      <label class="toggle-row">
+        <input type="checkbox" id="opt-lossless-png" checked>
+        <span class="toggle-switch"></span>
+        <span class="toggle-text">无损 PNG（文字更清晰，文件更大）</span>
+      </label>
+    </div>
+
+    <!-- 底部保障提示 -->
+    <footer class="app-footer">
+      <div class="footer-tip">
+        <span class="tip-icon">✨</span>
+        <span class="tip-text"><b>直出引擎</b>：无需经过浏览器打印弹窗，按当前网页渲染结果直接生成高清 PDF。</span>
+      </div>
+    </footer>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

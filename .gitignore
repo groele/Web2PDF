@@ -1,0 +1,9 @@
+# Browser and editor artifacts
+.DS_Store
+Thumbs.db
+*.crx
+*.zip
+
+# Local test output
+test-output/
+coverage/
