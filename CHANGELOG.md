@@ -1,6 +1,28 @@
 # Changelog
 
-## v2.4.0 - 2026-09-10
+## v3.0.0 - 2026-09-10
+
+### Added
+
+- Added a user-selectable export format: high-quality PDF, lossless PNG, or JPEG image.
+- Added an optional download filename field with automatic cleanup of unsupported filename characters.
+- Added persistent output-format preferences and consistent option propagation to automatic recognition and manual region selection.
+- Added accessible live status feedback and a clear disabled state when export is unavailable on the current page.
+
+### Changed
+
+- Promoted the extension to a major release focused on a professional, general-purpose web-region export workflow.
+- Kept PDF layout options visible only when relevant and clarified that image export produces a single complete image.
+
+### Fixed
+
+- Corrected custom filename handling for both automatic and manual export flows.
+- Removed duplicate format listeners and unreachable status logic before release.
+
+### Compatibility
+
+No user migration is required. Existing local export preferences remain valid.
+
 ## v2.6.0 - 2026-09-10
 
 ### Added
@@ -11,7 +33,6 @@
 ### Fixed
 
 - Kept exported image format consistent between the popup and in-page export entry points.
-
 
 ## v2.5.0 - 2026-09-10
 
@@ -25,7 +46,7 @@
 
 - Hide PDF-only layout controls while exporting an image.
 
-
+## v2.4.0 - 2026-09-10
 
 ### Added
 
