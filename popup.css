@@ -104,6 +104,13 @@ body {
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+
+.hero-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  box-shadow: none;
+  transform: none;
+}
 .hero-btn.primary {
   background: linear-gradient(135deg, #2563eb, #1e40af);
   color: #ffffff;
@@ -301,3 +308,30 @@ body {
 .footer-tip b {
   color: #1d4ed8;
 }
+
+.filename-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.filename-row span {
+  flex: 0 0 auto;
+}
+
+.filename-row input {
+  min-width: 0;
+  flex: 1;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  padding: 6px 8px;
+  background: #ffffff;
+  color: #0f172a;
+  font: inherit;
+  outline: none;
+}
+
+.filename-row input:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14); }

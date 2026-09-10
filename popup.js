@@ -1,5 +1,5 @@
 /**
- * 网页区域 PDF 导出器 - Popup Logic (v2.6.0)
+ * 网页区域 PDF 导出器 - Popup Logic (v3.0.0)
  */
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -9,6 +9,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const dpiBadge = document.getElementById('dpi-badge');
   const optLosslessPng = document.getElementById('opt-lossless-png');
 
+  const filenameInput = document.getElementById('export-filename');
   const scaleButtons = document.querySelectorAll('#scale-segmented .seg-item');
   const modeButtons = document.querySelectorAll('#mode-segmented .seg-item');
 
@@ -56,7 +57,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     currentOutputFormat = ['pdf', 'png', 'jpeg'].includes(format) ? format : 'pdf';
     formatButtons.forEach(btn => btn.classList.toggle('active', btn.dataset.format === currentOutputFormat));
     pdfOnlyRows.forEach(row => { if (row) row.hidden = currentOutputFormat !== 'pdf'; });
+    formatButtons.forEach(btn => btn.setAttribute('aria-pressed', String(btn.dataset.format === currentOutputFormat)));
     if (save && chrome.storage?.local) chrome.storage.local.set({ wos_output_format: currentOutputFormat });
+  }
+
+  function setExportAvailability(available, message) {
+    btnSmartExport.disabled = !available;
+    btnPickExport.disabled = !available;
+    btnSmartExport.setAttribute('aria-disabled', String(!available));
+    btnPickExport.setAttribute('aria-disabled', String(!available));
+    if (message) statusLabel.textContent = message;
   }
 
   // 分辨率段选切换
@@ -79,10 +89,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (chrome.storage && chrome.storage.local) {
       chrome.storage.local.set({ wos_lossless_png: currentLosslessPng });
     }
+  });
   formatButtons.forEach(btn => {
     btn.addEventListener('click', () => setOutputFormat(btn.dataset.format, true));
-  });
-
   });
 
   // Read preferences before enabling actions so the first click cannot export
@@ -139,20 +148,23 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   const status = await ensureContentScriptInjected();
-  if (status && status.isWos) {
-    statusLabel.textContent = 'WOS 页面已连接';
-  } else {
-    statusLabel.textContent = '全网通用模式';
+  if (!status) {
+    setExportAvailability(false, '此页面不允许导出');
+    return;
   }
+
+  statusLabel.textContent = status.isWos ? 'WOS 页面已连接' : '全网通用模式';
 
   // 点击“自动识别主体”：先在页面中预览识别范围，再由用户确认导出。
   btnSmartExport.addEventListener('click', async () => {
     try {
       await ensureContentScriptInjected();
+      statusLabel.textContent = '正在准备识别范围…';
       await chrome.tabs.sendMessage(tab.id, {
         action: 'preview_smart',
         options: {
           resolutionScale: currentScale,
+          fileName: filenameInput.value.trim(),
           outputFormat: currentOutputFormat,
           exportMode: currentExportMode,
           losslessPng: currentLosslessPng
@@ -168,10 +180,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   btnPickExport.addEventListener('click', async () => {
     try {
       await ensureContentScriptInjected();
+      statusLabel.textContent = '正在启动区域选择…';
       await chrome.tabs.sendMessage(tab.id, {
         action: 'start_picker',
         options: {
           resolutionScale: currentScale,
+          fileName: filenameInput.value.trim(),
           outputFormat: currentOutputFormat,
           exportMode: currentExportMode,
           losslessPng: currentLosslessPng

@@ -22,12 +22,12 @@
         </div>
         <div class="title-wrap">
           <h1>网页区域 PDF 导出器</h1>
-          <span class="version-badge">v2.6.0</span>
+          <span class="version-badge">v3.0.0</span>
         </div>
       </div>
       <div id="page-status" class="page-status">
         <span class="status-dot"></span>
-        <span id="status-label" class="status-label">就绪</span>
+        <span id="status-label" class="status-label" aria-live="polite">就绪</span>
       </div>
     </header>
 
@@ -77,6 +77,11 @@
       </div>
 
       <!-- 清晰度调节 -->
+      <label class="filename-row" for="export-filename">
+        <span>文件名（可选）</span>
+        <input id="export-filename" type="text" maxlength="60" placeholder="默认使用网页标题">
+      </label>
+
       <div class="config-row">
         <div class="config-label">
           <span>分辨率 / 清晰度</span>

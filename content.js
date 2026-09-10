@@ -1,5 +1,5 @@
 /**
- * 网页区域 PDF 导出器 - Content Script (v2.6.0 通用高保真版)
+ * 网页区域 PDF 导出器 - Content Script (v3.0.0 通用高保真版)
  */
 
 (function () {
@@ -198,6 +198,14 @@
     elements.forEach(el => { el.style.visibility = 'hidden'; });
     return () => states.forEach(({ el, visibility }) => { el.style.visibility = visibility; });
   }
+  function getRequestedFileName(fileName) {
+    const clean = String(fileName || '').trim()
+      .replace(/[\\/:*?"<>|\r\n]+/g, '_')
+      .replace(/\s+/g, '_')
+      .substring(0, 60);
+    return clean ? `${clean}.pdf` : getCleanFileName();
+  }
+
 
   // --- 高保真直出 PDF 引擎 ---
   async function downloadCanvasAsImage(canvas, fileName, outputFormat) {
@@ -286,7 +294,7 @@
       restoreExtensionUi();
       restoreExtensionUi = () => {};
 
-      const fileName = getCleanFileName();
+      const fileName = getRequestedFileName(options.fileName);
       if (outputFormat !== 'pdf') {
         await downloadCanvasAsImage(canvas, fileName, outputFormat);
         showToast(`✅ ${outputFormat.toUpperCase()} 图片已生成并开始下载`, 'success', 3000);
