@@ -1,5 +1,5 @@
 /**
- * 网页区域 PDF 导出器 - Content Script (v3.0.0 通用高保真版)
+ * 网页区域 PDF 导出器 - Content Script (v3.4.0)
  */
 
 (function () {
@@ -14,7 +14,7 @@
   let currentLosslessPng = true;
 
   let currentOutputFormat = 'pdf';
-  // A canvas needs four bytes per pixel before image encoding.  Keeping this
+  // A canvas needs four bytes per pixel before image encoding. Keeping this
   // bounded prevents a long article from exhausting the tab's memory.
   const MAX_RENDER_PIXELS = 48 * 1024 * 1024;
   const MAX_CANVAS_EDGE = 32767;
@@ -118,14 +118,18 @@
     return textScore + tagBonus + classBonus - linkPenalty - chromePenalty;
   }
 
-  // 获取页面标题生成文件名
+  // 获取页面标题生成文件名（智能过滤学术网站冗余后缀）
   function getCleanFileName() {
     const heading = document.querySelector('h1') || document.querySelector('h2') || document.title;
-    const titleText = typeof heading === 'string' ? heading : (heading.innerText || document.title);
-    const clean = titleText.trim()
+    let titleText = typeof heading === 'string' ? heading : (heading.innerText || document.title);
+    titleText = titleText
+      .replace(/\s*[-_–|]\s*(Web of Science|Clarivate|Nature|ScienceDirect|SpringerLink|Wiley Online Library|PubMed|IEEE Xplore|CNKI|知网|百度学术|核心合集).*$/i, '')
+      .trim();
+
+    const clean = titleText
       .replace(/[\\/:*?"<>|\r\n]+/g, '_')
       .replace(/\s+/g, '_')
-      .substring(0, 60);
+      .substring(0, 70);
     return clean ? `${clean}.pdf` : 'Academic_Document.pdf';
   }
 
@@ -155,13 +159,13 @@
     ]);
   }
 
-  function getPreferredPageBreaks(targetElement, canvasHeight, defaultPageHeightPx, scale) {
+  function getPreferredPageBreaks(targetElement, canvasHeight, defaultPageHeightPx, scale, cropTop = 0) {
     const targetRect = targetElement.getBoundingClientRect();
     const candidates = Array.from(targetElement.querySelectorAll(
       'h1,h2,h3,h4,p,li,blockquote,pre,figure,table,img,section,article'
     )).map(el => {
       const rect = el.getBoundingClientRect();
-      return Math.round((rect.bottom - targetRect.top) * scale);
+      return Math.round((rect.bottom - targetRect.top - cropTop) * scale);
     }).filter(bottom => bottom > 0 && bottom < canvasHeight).sort((a, b) => a - b);
 
     const breaks = [];
@@ -192,20 +196,111 @@
 
   function hideExtensionUi() {
     const elements = Array.from(document.querySelectorAll(
-      '#wos-pdf-floating-widget,#wos-picker-banner,#wos-smart-preview,#wos-toast-message'
+      '#wos-pdf-floating-widget,#wos-picker-banner,#wos-smart-preview,#wos-toast-message,#wos-export-target-marker,#wos-region-adjuster,#wos-region-adjuster-panel'
     ));
     const states = elements.map(el => ({ el, visibility: el.style.visibility }));
     elements.forEach(el => { el.style.visibility = 'hidden'; });
     return () => states.forEach(({ el, visibility }) => { el.style.visibility = visibility; });
   }
+
+  function createExportTargetMarker() {
+    const marker = document.createElement('div');
+    marker.id = 'wos-export-target-marker';
+    marker.setAttribute('aria-hidden', 'true');
+    marker.innerHTML = '<span class="wos-export-target-marker__label"><i></i><b>将导出此区域</b></span>';
+    (document.body || document.documentElement).appendChild(marker);
+
+    let activeElement = null;
+    let resizeObserver = null;
+
+    const isFixedElement = (el) => {
+      let cur = el;
+      while (cur && cur !== document.body && cur !== document.documentElement) {
+        const pos = window.getComputedStyle(cur).position;
+        if (pos === 'fixed') return true;
+        cur = cur.parentElement;
+      }
+      return false;
+    };
+
+    const update = (element, label = '将导出此区域') => {
+      if (element) {
+        if (element !== activeElement) {
+          activeElement = element;
+          if (resizeObserver) {
+            resizeObserver.disconnect();
+            try {
+              resizeObserver.observe(activeElement);
+            } catch (e) {}
+          }
+        }
+      }
+
+      if (!activeElement?.isConnected) {
+        marker.hidden = true;
+        return;
+      }
+
+      const rect = activeElement.getBoundingClientRect();
+      if (rect.width < 2 || rect.height < 2) {
+        marker.hidden = true;
+        return;
+      }
+
+      const isFixed = isFixedElement(activeElement);
+      let targetTop, targetLeft;
+
+      if (isFixed) {
+        if (marker.style.position !== 'fixed') marker.style.position = 'fixed';
+        targetTop = `${rect.top - 3}px`;
+        targetLeft = `${rect.left - 3}px`;
+      } else {
+        if (marker.style.position !== 'absolute') marker.style.position = 'absolute';
+        const bodyRect = document.body ? document.body.getBoundingClientRect() : { top: 0, left: 0 };
+        targetTop = `${rect.top - bodyRect.top - 3}px`;
+        targetLeft = `${rect.left - bodyRect.left - 3}px`;
+      }
+
+      const targetWidth = `${rect.width + 6}px`;
+      const targetHeight = `${rect.height + 6}px`;
+
+      if (marker.style.top !== targetTop) marker.style.top = targetTop;
+      if (marker.style.left !== targetLeft) marker.style.left = targetLeft;
+      if (marker.style.width !== targetWidth) marker.style.width = targetWidth;
+      if (marker.style.height !== targetHeight) marker.style.height = targetHeight;
+      if (marker.hidden) marker.hidden = false;
+
+      // 靠近顶端时将引导标签翻入选框内部，防止被浏览器顶部遮挡
+      marker.classList.toggle('wos-marker-flip-label', rect.top < 38);
+
+      const labelEl = marker.querySelector('b');
+      if (labelEl && label && labelEl.textContent !== label) {
+        labelEl.textContent = label;
+      }
+    };
+
+    if (typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(() => {
+        if (activeElement?.isConnected) update();
+      });
+    }
+
+    return {
+      update,
+      remove: () => {
+        if (resizeObserver) resizeObserver.disconnect();
+        marker.remove();
+      }
+    };
+  }
+
   function getRequestedFileName(fileName) {
     const clean = String(fileName || '').trim()
       .replace(/[\\/:*?"<>|\r\n]+/g, '_')
       .replace(/\s+/g, '_')
-      .substring(0, 60);
+      .substring(0, 70);
     return clean ? `${clean}.pdf` : getCleanFileName();
   }
-
 
   // --- 高保真直出 PDF 引擎 ---
   async function downloadCanvasAsImage(canvas, fileName, outputFormat) {
@@ -226,6 +321,7 @@
   }
 
   async function exportElementToPdf(targetElement, options = {}) {
+    if (isExporting) return;
     if (!targetElement) {
       showToast('🎯 请在网页上点击想要导出的区域', 'info', 3000);
       startElementPicker(options);
@@ -238,12 +334,13 @@
     }
 
     const JsPDFClass = getJsPdfInstance();
-    if (!JsPDFClass) {
+    if (!JsPDFClass && (!options.outputFormat || options.outputFormat === 'pdf')) {
       showToast('⚠️ 未检测到 PDF 生成器，请刷新网页重试', 'warning');
       return;
     }
 
-    const requestedScale = Number(options.resolutionScale || currentResolutionScale || 3.0);
+    const requested = Number(options.resolutionScale || currentResolutionScale || 3.0);
+    const requestedScale = Number.isFinite(requested) && requested > 0 ? Math.min(4, requested) : 3;
     const scale = getSafeScale(targetElement, requestedScale);
     const mode = options.exportMode || currentExportMode || 'a4';
     const outputFormat = ['pdf', 'png', 'jpeg'].includes(options.outputFormat) ? options.outputFormat : 'pdf';
@@ -272,24 +369,34 @@
     }
 
     let restoreExtensionUi = () => {};
+    isExporting = true;
     try {
       restoreExtensionUi = hideExtensionUi();
 
       await waitForRenderableAssets(targetElement);
 
-      const canvas = await html2canvas(targetElement, {
+      let canvas = await html2canvas(targetElement, {
         scale: scale,
         useCORS: true,
-        // A tainted canvas cannot be converted to an image for jsPDF. Images
-        // without CORS permission are therefore omitted instead of breaking
-        // the entire export at canvas.toDataURL().
         allowTaint: false,
         logging: false,
         backgroundColor: '#ffffff',
         windowWidth: document.documentElement.offsetWidth,
-        scrollX: 0,
-        scrollY: -window.scrollY
+        scrollX: window.scrollX,
+        scrollY: window.scrollY
       });
+
+      const cropTopPx = Math.max(0, Math.round(Number(options.cropTop || 0) * scale));
+      const cropBottomPx = Math.min(canvas.height, Math.round(Number(options.cropBottom || (canvas.height / scale)) * scale));
+      if (cropBottomPx - cropTopPx > 2 && (cropTopPx > 0 || cropBottomPx < canvas.height)) {
+        const croppedCanvas = document.createElement('canvas');
+        croppedCanvas.width = canvas.width;
+        croppedCanvas.height = cropBottomPx - cropTopPx;
+        croppedCanvas.getContext('2d').drawImage(canvas, 0, cropTopPx, canvas.width, croppedCanvas.height, 0, 0, canvas.width, croppedCanvas.height);
+        canvas.width = 0;
+        canvas.height = 0;
+        canvas = croppedCanvas;
+      }
 
       restoreExtensionUi();
       restoreExtensionUi = () => {};
@@ -301,10 +408,6 @@
         return;
       }
 
-
-      // PNG is lossless but can make a long document several hundred MB. Keep
-      // it for normal captures and switch very large captures to high-quality
-      // JPEG rather than failing the whole export.
       if (usePng && canvas.width * canvas.height > 24 * 1024 * 1024) {
         format = 'JPEG';
         mimeType = 'image/jpeg';
@@ -312,30 +415,30 @@
         showToast('ℹ️ 超长内容已使用高质量 JPEG，以避免 PDF 过大或生成失败', 'info', 3500);
       }
 
-      const pdfWidthMm = 210;
-      const continuousHeightMm = (canvas.height * (pdfWidthMm - 16)) / canvas.width + 16;
-      const useContinuousPage = mode === 'continuous' && continuousHeightMm <= MAX_CONTINUOUS_HEIGHT_MM;
+      const wantsAdaptive = mode === 'adaptive' || mode === 'continuous';
+      const isAdaptive = wantsAdaptive && Math.max(canvas.width, canvas.height) / scale * 25.4 / 96 + 12 <= MAX_CONTINUOUS_HEIGHT_MM;
+      if (wantsAdaptive && !isAdaptive) showToast('选区超出单页尺寸上限，已切换 A4 分页', 'info', 4000);
 
-      if (mode === 'continuous' && !useContinuousPage) {
-        showToast('ℹ️ 页面过长，已安全切换为 A4 分页，避免生成无法打开的 PDF', 'info', 4000);
-      }
-
-      if (useContinuousPage) {
-        // 单页长图 PDF
-        const marginMm = 8;
-        const printWidthMm = pdfWidthMm - (marginMm * 2);
-        const printHeightMm = (canvas.height * printWidthMm) / canvas.width;
-        const totalHeightMm = printHeightMm + (marginMm * 2);
+      if (isAdaptive) {
+        // 根据图形实际长宽等比自适应单页 PDF (以 96 DPI CSS 像素精确换算为毫米)
+        const marginMm = 6;
+        const cssWidth = canvas.width / scale;
+        const cssHeight = canvas.height / scale;
+        const contentWidthMm = (cssWidth * 25.4) / 96;
+        const contentHeightMm = (cssHeight * 25.4) / 96;
+        const pageWidthMm = Math.min(MAX_CONTINUOUS_HEIGHT_MM, Math.round((contentWidthMm + marginMm * 2) * 10) / 10);
+        const pageHeightMm = Math.min(MAX_CONTINUOUS_HEIGHT_MM, Math.round((contentHeightMm + marginMm * 2) * 10) / 10);
+        const isLandscape = pageWidthMm > pageHeightMm;
 
         const pdf = new JsPDFClass({
-          orientation: 'p',
+          orientation: isLandscape ? 'l' : 'p',
           unit: 'mm',
-          format: [pdfWidthMm, totalHeightMm]
+          format: [pageWidthMm, pageHeightMm]
         });
         setPdfMetadata(pdf, fileName);
 
         const imgData = canvas.toDataURL(mimeType, quality);
-        pdf.addImage(imgData, format, marginMm, marginMm, printWidthMm, printHeightMm, undefined, 'FAST');
+        pdf.addImage(imgData, format, marginMm, marginMm, contentWidthMm, contentHeightMm, undefined, 'FAST');
         pdf.save(fileName);
       } else {
         // 标准 A4 多页分页
@@ -349,7 +452,7 @@
         const printHeightMm = pageHeightMm - (marginY * 2);
 
         const pageHeightPx = Math.floor((printHeightMm * canvas.width) / printWidthMm);
-        const preferredBreaks = getPreferredPageBreaks(targetElement, canvas.height, pageHeightPx, scale);
+        const preferredBreaks = getPreferredPageBreaks(targetElement, canvas.height, pageHeightPx, scale, Number(options.cropTop || 0));
 
         const sliceCanvas = document.createElement('canvas');
         sliceCanvas.width = canvas.width;
@@ -400,6 +503,8 @@
         }
 
         pdf.save(fileName);
+        sliceCanvas.width = 0;
+        sliceCanvas.height = 0;
       }
 
       showToast(`✅ PDF 生成成功，已开始下载！`, 'success', 3000);
@@ -407,6 +512,7 @@
       console.error('PDF 生成异常:', err);
       showToast('❌ 生成失败: ' + (err.message || '未知错误'), 'warning', 4000);
     } finally {
+      isExporting = false;
       restoreExtensionUi();
       if (primaryBtn && originalBtnText) {
         primaryBtn.classList.remove('loading');
@@ -418,10 +524,12 @@
   // --- 自由框选模式 ---
   let isPicking = false;
   let currentHighlightedEl = null;
-  let isPreviewingSmartTarget = false;
+  let isExporting = false;
+  let closeAdjuster = null;
 
   function startSmartPreview(options = {}) {
-    if (isPicking || isPreviewingSmartTarget) return;
+    if (isPicking || isExporting) return;
+    if (closeAdjuster) closeAdjuster();
     const target = findSmartContentContainer();
     if (!target) {
       showToast('未识别到阅读区，请使用“选择页面区块”', 'warning', 3500);
@@ -429,83 +537,161 @@
       return;
     }
 
-    isPreviewingSmartTarget = true;
-    target.classList.add('wos-smart-candidate');
-    const preview = document.createElement('div');
-    preview.id = 'wos-smart-preview';
-    preview.innerHTML = `
-      <span>已识别推荐导出区域</span>
-      <button type="button" data-action="export">导出此区域</button>
-      <button type="button" data-action="pick">自己选择</button>
-      <button type="button" data-action="cancel" aria-label="取消自动识别">✕</button>
-    `;
-    document.body.appendChild(preview);
+    openRegionAdjuster(target, options);
 
-    const stopPreview = () => {
-      isPreviewingSmartTarget = false;
-      target.classList.remove('wos-smart-candidate');
-      preview.remove();
+  }
+
+  function openRegionAdjuster(target, options = {}) {
+    if (closeAdjuster) closeAdjuster();
+    const rect = target.getBoundingClientRect();
+    if (rect.width < 1 || rect.height < 1) return;
+    const baseTop = rect.top + window.scrollY;
+    const baseBottom = rect.bottom + window.scrollY;
+    const state = { top: baseTop, bottom: baseBottom, dragging: null };
+    const MIN_HEIGHT = Math.min(24, rect.height);
+
+    const adjuster = document.createElement('div');
+    adjuster.id = 'wos-region-adjuster';
+    adjuster.innerHTML = `
+      <div class="wos-region-frame"></div>
+      <button type="button" class="wos-region-handle top" data-edge="top" aria-label="拖动调整选区上边缘" title="拖动调整上边缘"><i></i></button>
+      <button type="button" class="wos-region-handle bottom" data-edge="bottom" aria-label="拖动调整选区下边缘" title="拖动调整下边缘"><i></i></button>
+    `;
+    const panel = document.createElement('div');
+    panel.id = 'wos-region-adjuster-panel';
+    panel.innerHTML = `
+      <span class="wos-region-tip">拖动上下边缘 · 聚焦手柄后 ↑↓ 微调</span>
+      <button type="button" data-action="export">导出此区域</button>
+      <button type="button" data-action="repick">重选</button>
+      <button type="button" data-action="cancel" aria-label="取消选区">✕</button>
+    `;
+    document.body.append(adjuster, panel);
+
+    const render = () => {
+      if (!target.isConnected) { close(); return; }
+      const currentRect = target.getBoundingClientRect();
+      const top = currentRect.top + state.top - baseTop;
+      const bottom = currentRect.top + state.bottom - baseTop;
+      adjuster.style.left = `${currentRect.left}px`;
+      adjuster.style.width = `${currentRect.width}px`;
+      adjuster.style.top = `${top}px`;
+      adjuster.style.height = `${Math.max(MIN_HEIGHT, bottom - top)}px`;
+      const panelTop = bottom + 10 <= window.innerHeight - 46 ? bottom + 10 : Math.max(10, top - 46);
+      panel.style.top = `${Math.max(10, Math.min(panelTop, window.innerHeight - panel.offsetHeight - 10))}px`;
+      panel.style.left = `${Math.max(12, Math.min(currentRect.left, window.innerWidth - panel.offsetWidth - 12))}px`;
+    };
+
+    const finishDrag = () => {
+      state.dragging = null;
+      document.body.classList.remove('wos-region-resizing');
+      document.removeEventListener('pointermove', onPointerMove, true);
+      document.removeEventListener('pointerup', finishDrag, true);
+      document.removeEventListener('pointercancel', finishDrag, true);
+    };
+    const onPointerMove = (event) => {
+      if (!state.dragging) return;
+      const point = event.clientY - target.getBoundingClientRect().top + baseTop;
+      if (state.dragging === 'top') {
+        state.top = Math.max(baseTop, Math.min(point, state.bottom - MIN_HEIGHT));
+      } else {
+        state.bottom = Math.min(baseBottom, Math.max(point, state.top + MIN_HEIGHT));
+      }
+      render();
+    };
+    const startDrag = (event) => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+      state.dragging = event.currentTarget.dataset.edge;
+      document.body.classList.add('wos-region-resizing');
+      document.addEventListener('pointermove', onPointerMove, true);
+      document.addEventListener('pointerup', finishDrag, true);
+      document.addEventListener('pointercancel', finishDrag, true);
+    };
+    const close = () => {
+      closeAdjuster = null;
+      finishDrag();
+      adjuster.remove();
+      panel.remove();
       document.removeEventListener('keydown', onKeyDown, true);
+      window.removeEventListener('scroll', render, true);
+      window.removeEventListener('resize', render, true);
     };
     const onKeyDown = (event) => {
-      if (event.key === 'Escape') stopPreview();
+      if (event.key === 'Escape') close();
+      const edge = event.target.dataset?.edge;
+      if (edge && ['ArrowUp', 'ArrowDown'].includes(event.key)) {
+        event.preventDefault();
+        const delta = (event.key === 'ArrowUp' ? -1 : 1) * (event.shiftKey ? 10 : 1);
+        state[edge] = edge === 'top' ? Math.max(baseTop, Math.min(state.top + delta, state.bottom - MIN_HEIGHT)) : Math.min(baseBottom, Math.max(state.bottom + delta, state.top + MIN_HEIGHT));
+        render();
+      }
     };
 
-    preview.addEventListener('click', event => {
+    adjuster.querySelectorAll('.wos-region-handle').forEach(handle => handle.addEventListener('pointerdown', startDrag));
+    panel.addEventListener('click', (event) => {
       const action = event.target.closest('button')?.dataset.action;
       if (action === 'export') {
-        stopPreview();
-        exportElementToPdf(target, options);
-      } else if (action === 'pick') {
-        stopPreview();
+        if (!target.isConnected || Math.abs(target.getBoundingClientRect().height - rect.height) > 1) {
+          close();
+          showToast('页面内容尺寸已变化，请重新选择区域', 'warning', 3500);
+          return;
+        }
+        const cropTop = state.top - baseTop;
+        const cropBottom = state.bottom - baseTop;
+        close();
+        exportElementToPdf(target, { ...options, cropTop, cropBottom });
+      } else if (action === 'repick') {
+        close();
         startElementPicker(options);
       } else if (action === 'cancel') {
-        stopPreview();
+        close();
       }
     });
     document.addEventListener('keydown', onKeyDown, true);
+    window.addEventListener('scroll', render, true);
+    window.addEventListener('resize', render, true);
+    closeAdjuster = close;
+    render();
   }
 
   function startElementPicker(options = {}) {
-    if (isPicking) return;
+    if (isPicking || isExporting) return;
+    if (closeAdjuster) closeAdjuster();
     isPicking = true;
 
     const banner = document.createElement('div');
     banner.id = 'wos-picker-banner';
     banner.innerHTML = `
-      <span>🎯 移动鼠标选择网页区块，点击后直接导出</span>
-      <span class="wos-banner-key">↑ 选父级 · ESC 退出</span>
+      <span>🎯 点击网页区块以锁定选区</span>
+      <span class="wos-banner-key">↑ 选父级 · 锁定后拖动边缘 · ESC 退出</span>
     `;
     document.body.appendChild(banner);
+
+    const marker = createExportTargetMarker();
+    const refreshMarker = () => {
+      if (currentHighlightedEl) marker.update(currentHighlightedEl, '点击锁定选区');
+    };
 
     function onMouseMove(e) {
       if (!isPicking) return;
       const target = document.elementFromPoint(e.clientX, e.clientY);
-      if (!target || target.closest('#wos-picker-banner') || target.closest('#wos-pdf-floating-widget')) {
-        return;
-      }
-
+      if (!target || target.closest('#wos-picker-banner') || target.closest('#wos-pdf-floating-widget')) return;
       if (target === currentHighlightedEl) return;
-
-      if (currentHighlightedEl) {
-        currentHighlightedEl.classList.remove('wos-element-highlighted');
-      }
-
+      if (currentHighlightedEl) currentHighlightedEl.classList.remove('wos-element-highlighted');
       currentHighlightedEl = target;
       currentHighlightedEl.classList.add('wos-element-highlighted');
+      refreshMarker();
     }
 
     function onClick(e) {
       if (!isPicking) return;
+      if (e.target.closest('#wos-picker-banner,#wos-pdf-floating-widget')) return;
       e.preventDefault();
-      e.stopPropagation();
-
-      const selected = currentHighlightedEl;
+      e.stopImmediatePropagation();
+      const selected = currentHighlightedEl || document.elementFromPoint(e.clientX, e.clientY);
       stopElementPicker();
-
-      if (selected) {
-        exportElementToPdf(selected, options);
-      }
+      if (selected) openRegionAdjuster(selected, options);
     }
 
     function onKeyDown(e) {
@@ -514,7 +700,7 @@
         currentHighlightedEl.classList.remove('wos-element-highlighted');
         currentHighlightedEl = currentHighlightedEl.parentElement;
         currentHighlightedEl.classList.add('wos-element-highlighted');
-        return;
+        refreshMarker();
       }
       if (e.key === 'Escape' || e.keyCode === 27) {
         stopElementPicker();
@@ -528,19 +714,21 @@
         currentHighlightedEl.classList.remove('wos-element-highlighted');
         currentHighlightedEl = null;
       }
-      const b = document.getElementById('wos-picker-banner');
-      if (b) b.remove();
-
+      marker.remove();
+      banner.remove();
       document.removeEventListener('mousemove', onMouseMove, true);
       document.removeEventListener('click', onClick, true);
       document.removeEventListener('keydown', onKeyDown, true);
+      window.removeEventListener('resize', refreshMarker, true);
+      window.removeEventListener('scroll', refreshMarker, true);
     }
 
     document.addEventListener('mousemove', onMouseMove, true);
     document.addEventListener('click', onClick, true);
     document.addEventListener('keydown', onKeyDown, true);
+    window.addEventListener('resize', refreshMarker, true);
+    window.addEventListener('scroll', refreshMarker, true);
   }
-
   // --- 悬浮操作胶囊更新 ---
   function getOutputLabel() {
     return currentOutputFormat === 'pdf' ? 'PDF' : currentOutputFormat.toUpperCase();
@@ -549,7 +737,7 @@
   function updateFloatingBadge() {
     const badge = document.getElementById('wos-quick-badge');
     if (badge) {
-      const modeText = currentExportMode === 'a4' ? 'A4' : '长图';
+      const modeText = currentExportMode === 'a4' ? 'A4 纸' : '自适应';
       badge.textContent = `${currentResolutionScale}x · ${modeText}`;
     }
   }
@@ -560,7 +748,7 @@
     widget.id = 'wos-pdf-floating-widget';
     widget.innerHTML = `
       <span class="wos-widget-logo-icon" title="展开 PDF 导出助手">📄</span>
-      <button class="wos-widget-btn primary" id="wos-btn-auto-export" title="智能识别并直接导出主要内容为 PDF">
+      <button class="wos-widget-btn primary" id="wos-btn-auto-export" title="识别主体，调整范围后确认导出">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:2px">
           <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
         </svg>
@@ -572,8 +760,8 @@
       </button>
 
       <!-- 紧凑规格徽标 (点击可快速轮换模式) -->
-      <button class="wos-badge-chip" id="wos-quick-badge" title="当前排版规格（点击切换 A4/长图）">
-        ${currentResolutionScale}x · ${currentExportMode === 'a4' ? 'A4' : '长图'}
+      <button class="wos-badge-chip" id="wos-quick-badge" title="当前页面规格（点击切换 A4 纸张/自适应大小）">
+        ${currentResolutionScale}x · ${currentExportMode === 'a4' ? 'A4 纸' : '自适应'}
       </button>
 
       <div class="wos-widget-divider"></div>
@@ -587,15 +775,15 @@
     const badgeBtn = widget.querySelector('#wos-quick-badge');
     const minBtn = widget.querySelector('#wos-btn-minimize');
 
-    // 点击徽标轮换 A4 / 长图
+    // 点击徽标轮换 A4 / 自适应大小
     badgeBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      currentExportMode = currentExportMode === 'a4' ? 'continuous' : 'a4';
+      currentExportMode = currentExportMode === 'a4' ? 'adaptive' : 'a4';
       updateFloatingBadge();
       if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
         chrome.storage.local.set({ wos_export_mode: currentExportMode });
       }
-      showToast(`已切换为: ${currentExportMode === 'a4' ? 'A4 标准分页' : '单页无缝长图'}`, 'info', 1200);
+      showToast(`已切换规格: ${currentExportMode === 'a4' ? 'A4 纸张 (标准分页)' : '自适应大小 (依图定幅)'}`, 'info', 1500);
     });
 
     autoBtn.addEventListener('click', (e) => {

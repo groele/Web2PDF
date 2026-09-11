@@ -22,7 +22,7 @@
         </div>
         <div class="title-wrap">
           <h1>网页区域 PDF 导出器</h1>
-          <span class="version-badge">v3.0.0</span>
+          <span class="version-badge">v3.4.0</span>
         </div>
       </div>
       <div id="page-status" class="page-status">
@@ -34,7 +34,7 @@
     <!-- 核心操作区 (双智能入口) -->
     <div class="hero-actions">
       <!-- 自动识别主体 -->
-      <button id="btn-smart-export" class="hero-btn primary" title="识别推荐导出区域，预览确认后再下载">
+      <button id="btn-smart-export" disabled class="hero-btn primary" title="识别推荐导出区域，预览确认后再下载">
         <div class="btn-icon-box">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
             <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
@@ -47,7 +47,7 @@
       </button>
 
       <!-- 自由点选导出 -->
-      <button id="btn-pick-export" class="hero-btn secondary" title="在网页上点击任意需要导出的区块">
+      <button id="btn-pick-export" disabled class="hero-btn secondary" title="在网页上点击任意需要导出的区块">
         <div class="btn-icon-box">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
             <circle cx="12" cy="12" r="10"></circle>
@@ -59,7 +59,7 @@
         </div>
         <div class="btn-text-group">
           <span class="btn-main-title">选择页面区块</span>
-          <span class="btn-sub-desc">鼠标悬停点选 · ↑ 扩大范围</span>
+          <span class="btn-sub-desc">点选 → 调整上下边缘 → 确认导出</span>
         </div>
       </button>
     </div>
@@ -94,14 +94,15 @@
         </div>
       </div>
 
-      <!-- 排版规格 -->
+      <!-- 页面尺寸 / 格式规格 -->
       <div class="config-row">
         <div class="config-label">
-          <span>排版规格</span>
+          <span>页面尺寸 / 规格</span>
+          <span id="page-size-hint" class="badge-accent">A4 纸张</span>
         </div>
         <div class="segmented-control" id="mode-segmented">
-          <button type="button" class="seg-item active" data-mode="a4">A4 标准分页</button>
-          <button type="button" class="seg-item" data-mode="continuous">单页无缝长图</button>
+          <button type="button" class="seg-item active" data-mode="a4" title="标准 A4 纸张 (210×297mm)，智能分页与页码，适合打印归档">A4 纸张</button>
+          <button type="button" class="seg-item" data-mode="adaptive" title="根据所选图形或内容实际长宽等比自适应单页，所选即所得不留白">自适应大小</button>
         </div>
       </div>
 

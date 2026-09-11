@@ -1,5 +1,24 @@
 # Changelog
 
+## v3.4.0 - 2026-09-11
+
+### Added
+- Confirm selection before export; drag top/bottom handles or use arrow keys for precise cropping.
+- Smart detection and manual picking share the adjustment workflow.
+
+### Fixed
+- Offset A4 page-break candidates after top cropping.
+- Keep controls visible on long pages and narrow viewports; clean up repeated selection sessions.
+- Prevent overlapping exports and detect changed target dimensions before export.
+- Preserve small-image aspect ratios; fall back to A4 when adaptive PDF dimensions exceed limits.
+- Correct capture scroll coordinates and remove redundant all-sites permission.
+
+### Changed
+- Align popup guidance and version metadata; retain activeTab access for user-selected pages.
+
+### Compatibility
+- Existing settings remain supported. Reload the extension and refresh existing tabs.
+
 ## v3.0.0 - 2026-09-10
 
 ### Added

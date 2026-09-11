@@ -7,3 +7,5 @@ Thumbs.db
 # Local test output
 test-output/
 coverage/
+.playwright-mcp/
+output/playwright/
