@@ -1,10 +1,12 @@
 /**
- * 网页区域 PDF 导出器 - Content Script (v3.4.0)
+ * 网页区域 PDF 导出器 - Content Script (v3.5.0)
  */
 
 (function () {
+  const CONTENT_VERSION = '3.5.0';
   if (window.__WOS_PDF_EXPORTER_INITIALIZED__) return;
   window.__WOS_PDF_EXPORTER_INITIALIZED__ = true;
+  window.__WOS_PDF_EXPORTER_VERSION__ = CONTENT_VERSION;
 
   // 默认排版模式：'a4' (标准 A4 分页) 或 'continuous' (单页长图)
   let currentExportMode = 'a4';
@@ -50,8 +52,8 @@
   // --- 全网通用的智能主要内容定位引擎 ---
   function findSmartContentContainer() {
     // 1. 优先定位学术网站 (Web of Science / PubMed / CNKI 等) 的核心文章白底卡片
-    const heading = document.querySelector('h1') || document.querySelector('h2');
-    if (heading) {
+    const headings = Array.from(document.querySelectorAll('h1, h2'));
+    for (const heading of headings) {
       let curr = heading;
       while (curr && curr !== document.body && curr !== document.documentElement) {
         const text = curr.innerText || '';
@@ -146,22 +148,30 @@
   }
 
   async function waitForRenderableAssets(targetElement) {
+    const cleanups = [];
     const imageTasks = Array.from(targetElement.querySelectorAll('img'))
       .filter(img => !img.complete)
       .map(img => new Promise(resolve => {
         img.addEventListener('load', resolve, { once: true });
         img.addEventListener('error', resolve, { once: true });
+        cleanups.push(() => { img.removeEventListener('load', resolve); img.removeEventListener('error', resolve); });
       }));
     const fontsReady = document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve();
-    await Promise.race([
-      Promise.allSettled([fontsReady, ...imageTasks]),
-      new Promise(resolve => setTimeout(resolve, 2500))
-    ]);
+    let timer;
+    try {
+      await Promise.race([
+        Promise.allSettled([fontsReady, ...imageTasks]),
+        new Promise(resolve => { timer = setTimeout(resolve, 2500); })
+      ]);
+    } finally {
+      clearTimeout(timer);
+      cleanups.forEach(cleanup => cleanup());
+    }
   }
 
-  function getPreferredPageBreaks(targetElement, canvasHeight, defaultPageHeightPx, scale, cropTop = 0) {
+  function getPreferredPageBreaks(targetElement, canvasHeight, defaultPageHeightPx, scale, cropTop = 0, clonedBoundaries = null) {
     const targetRect = targetElement.getBoundingClientRect();
-    const candidates = Array.from(targetElement.querySelectorAll(
+    const candidates = clonedBoundaries ? clonedBoundaries.map(y => Math.round(y * scale)).sort((a, b) => a - b) : Array.from(targetElement.querySelectorAll(
       'h1,h2,h3,h4,p,li,blockquote,pre,figure,table,img,section,article'
     )).map(el => {
       const rect = el.getBoundingClientRect();
@@ -196,19 +206,101 @@
 
   function hideExtensionUi() {
     const elements = Array.from(document.querySelectorAll(
-      '#wos-pdf-floating-widget,#wos-picker-banner,#wos-smart-preview,#wos-toast-message,#wos-export-target-marker,#wos-region-adjuster,#wos-region-adjuster-panel'
+      '#wos-mask-overlay,#wos-guidance-banner,#wos-pdf-floating-widget,#wos-picker-banner,#wos-smart-preview,#wos-toast-message,#wos-export-target-marker,#wos-region-adjuster,#wos-region-adjuster-panel'
     ));
     const states = elements.map(el => ({ el, visibility: el.style.visibility }));
     elements.forEach(el => { el.style.visibility = 'hidden'; });
     return () => states.forEach(({ el, visibility }) => { el.style.visibility = visibility; });
   }
 
+  // --- 聚光灯暗色遮罩系统 (4-Panel Spotlight Mask) ---
+  function createMaskOverlay() {
+    let overlay = document.getElementById('wos-mask-overlay');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = 'wos-mask-overlay';
+      overlay.setAttribute('aria-hidden', 'true');
+      overlay.setAttribute('data-html2canvas-ignore', 'true');
+      overlay.innerHTML = `
+        <div class="wos-mask-panel top"></div>
+        <div class="wos-mask-panel bottom"></div>
+        <div class="wos-mask-panel left"></div>
+        <div class="wos-mask-panel right"></div>
+      `;
+      document.documentElement.appendChild(overlay);
+    }
+    const topPanel = overlay.querySelector('.top');
+    const bottomPanel = overlay.querySelector('.bottom');
+    const leftPanel = overlay.querySelector('.left');
+    const rightPanel = overlay.querySelector('.right');
+
+    const update = (rect) => {
+      if (!rect || rect.width <= 0 || rect.height <= 0) {
+        topPanel.style.height = '100vh';
+        bottomPanel.style.top = '100vh';
+        leftPanel.style.width = '0';
+        rightPanel.style.left = '100vw';
+        return;
+      }
+      const t = Math.max(0, rect.top);
+      const b = Math.max(0, rect.top + rect.height);
+      const l = Math.max(0, rect.left);
+      const r = Math.max(0, rect.left + rect.width);
+      const h = Math.max(0, rect.height);
+
+      topPanel.style.height = `${t}px`;
+      bottomPanel.style.top = `${b}px`;
+      leftPanel.style.top = `${t}px`;
+      leftPanel.style.height = `${h}px`;
+      leftPanel.style.width = `${l}px`;
+      rightPanel.style.top = `${t}px`;
+      rightPanel.style.height = `${h}px`;
+      rightPanel.style.left = `${r}px`;
+    };
+
+    const remove = () => {
+      overlay.remove();
+    };
+
+    return { update, remove, element: overlay };
+  }
+
+  // --- 顶部流程引导横幅 (Top Guidance Banner) ---
+  function createGuidanceBanner(icon, text, shortcuts = []) {
+    let banner = document.getElementById('wos-guidance-banner');
+    if (!banner) {
+      banner = document.createElement('div');
+      banner.id = 'wos-guidance-banner';
+      banner.setAttribute('data-html2canvas-ignore', 'true');
+      document.documentElement.appendChild(banner);
+    }
+    const renderContent = (curIcon, curText, curShortcuts) => {
+      const badgesHtml = curShortcuts.map(k => `<span class="wos-guidance-key">${k}</span>`).join('');
+      banner.innerHTML = `
+        <span class="wos-guidance-icon">${curIcon}</span>
+        <span class="wos-guidance-text">${curText}</span>
+        ${curShortcuts.length ? `<div class="wos-guidance-badges">${badgesHtml}</div>` : ''}
+      `;
+    };
+    renderContent(icon, text, shortcuts);
+    return {
+      update(newIcon, newText, newShortcuts = []) {
+        renderContent(newIcon, newText, newShortcuts);
+      },
+      remove() {
+        banner?.remove();
+      }
+    };
+  }
+
   function createExportTargetMarker() {
     const marker = document.createElement('div');
     marker.id = 'wos-export-target-marker';
     marker.setAttribute('aria-hidden', 'true');
+    marker.setAttribute('data-html2canvas-ignore', 'true');
+    marker.hidden = true;
     marker.innerHTML = '<span class="wos-export-target-marker__label"><i></i><b>将导出此区域</b></span>';
-    (document.body || document.documentElement).appendChild(marker);
+    document.documentElement.appendChild(marker);
 
     let activeElement = null;
     let resizeObserver = null;
@@ -223,7 +315,7 @@
       return false;
     };
 
-    const update = (element, label = '将导出此区域') => {
+    const update = (element, label) => {
       if (element) {
         if (element !== activeElement) {
           activeElement = element;
@@ -247,19 +339,10 @@
         return;
       }
 
-      const isFixed = isFixedElement(activeElement);
-      let targetTop, targetLeft;
-
-      if (isFixed) {
-        if (marker.style.position !== 'fixed') marker.style.position = 'fixed';
-        targetTop = `${rect.top - 3}px`;
-        targetLeft = `${rect.left - 3}px`;
-      } else {
-        if (marker.style.position !== 'absolute') marker.style.position = 'absolute';
-        const bodyRect = document.body ? document.body.getBoundingClientRect() : { top: 0, left: 0 };
-        targetTop = `${rect.top - bodyRect.top - 3}px`;
-        targetLeft = `${rect.left - bodyRect.left - 3}px`;
-      }
+      // getBoundingClientRect is always viewport-relative, including sticky elements.
+      marker.style.position = 'fixed';
+      const targetTop = `${rect.top - 3}px`;
+      const targetLeft = `${rect.left - 3}px`;
 
       const targetWidth = `${rect.width + 6}px`;
       const targetHeight = `${rect.height + 6}px`;
@@ -296,10 +379,218 @@
 
   function getRequestedFileName(fileName) {
     const clean = String(fileName || '').trim()
+      .replace(/\.(pdf|png|jpe?g)$/i, '')
       .replace(/[\\/:*?"<>|\r\n]+/g, '_')
       .replace(/\s+/g, '_')
       .substring(0, 70);
     return clean ? `${clean}.pdf` : getCleanFileName();
+  }
+
+  function findScrollCaptureTarget(selected) {
+    const isScrollable = element => {
+      const style = getComputedStyle(element);
+      return /(auto|scroll|overlay)/.test(style.overflowY) && element.clientHeight > 0
+        && element.scrollHeight > element.clientHeight + 2;
+    };
+    let scroller = null;
+    for (let node = selected; node && node !== document.body && node !== document.documentElement; node = node.parentElement) {
+      if (isScrollable(node)) { scroller = node; break; }
+    }
+    if (!scroller) {
+      let panel = null;
+      for (let node = selected; node && node !== document.body && node !== document.documentElement; node = node.parentElement) {
+        if (node.matches('aside,dialog,[role="dialog"]') || getComputedStyle(node).position === 'fixed') { panel = node; break; }
+      }
+      // A normal article containing a small scrolling table is still an article.
+      if (!panel) return null;
+      const searchRoot = panel || selected;
+      scroller = [...searchRoot.querySelectorAll('*')].find(node => isScrollable(node)
+        && node.getBoundingClientRect().width >= searchRoot.getBoundingClientRect().width * 0.6);
+    }
+    if (!scroller) return null;
+    // Include a drawer's title and footer if they wrap its independently scrolling body.
+    let root = scroller;
+    for (let node = scroller; node && node !== document.body && node !== document.documentElement; node = node.parentElement) {
+      const rect = node.getBoundingClientRect();
+      if (rect.width > window.innerWidth * 0.9) break;
+      if (getComputedStyle(node).position === 'fixed' || node.matches('[role="dialog"],dialog,aside')) root = node;
+    }
+    return root;
+  }
+
+  function createScrollCapturePlan(root) {
+    const expandNodes = new Set([root]);
+    for (const element of root.querySelectorAll('*')) {
+      if (element.clientHeight > 0 && element.scrollHeight > element.clientHeight + 2
+        && /(auto|scroll|overlay)/.test(getComputedStyle(element).overflowY)) {
+        for (let node = element; node && root.contains(node); node = node.parentElement) expandNodes.add(node);
+      }
+    }
+    const attribute = 'data-wos-capture-' + Math.random().toString(36).slice(2);
+    const nodes = [root, ...root.querySelectorAll('*')].filter(element => expandNodes.has(element));
+    const geometry = nodes.map((element, index) => {
+      const rect = element.getBoundingClientRect();
+      const style = getComputedStyle(element);
+      return { index, element, width: rect.width, height: rect.height, expand: true,
+        scrollbar: Math.max(0, element.offsetWidth - element.clientWidth - parseFloat(style.borderLeftWidth || 0) - parseFloat(style.borderRightWidth || 0)),
+        paddingRight: parseFloat(style.paddingRight) || 0 };
+    });
+    return { width: root.getBoundingClientRect().width, geometry, attribute,
+      mark() { geometry.forEach(entry => entry.element.setAttribute(attribute, String(entry.index))); },
+      restore() { geometry.forEach(entry => entry.element.removeAttribute(attribute)); }
+    };
+  }
+
+  function expandScrollCapture(clonedDocument, root, plan) {
+    const nodes = plan.geometry.map(entry => entry.index === 0 ? root : root.querySelector(`[${plan.attribute}="${entry.index}"]`));
+    if (nodes.some(node => !node)) throw new Error('滚动区域结构已变化，请重新选择后导出');
+    const set = (element, property, value) => element.style.setProperty(property, value, 'important');
+    set(root, 'bottom', 'auto');
+    // Preserve computed content width when removing a scrollbar.
+    for (const entry of plan.geometry) {
+      const element = nodes[entry.index];
+      if (entry.expand || entry.index === 0) {
+        set(element, 'box-sizing', 'border-box');
+        set(element, 'width', entry.width + 'px');
+        set(element, 'min-width', entry.width + 'px');
+        set(element, 'max-width', entry.width + 'px');
+        if (entry.scrollbar) {
+          set(element, 'scrollbar-gutter', 'auto');
+          set(element, 'padding-right', (entry.paddingRight + entry.scrollbar) + 'px');
+        }
+        set(element, 'overflow', 'visible');
+        set(element, 'max-height', 'none');
+        set(element, 'height', 'auto');
+        set(element, 'flex-shrink', '0');
+        element.scrollTop = 0;
+        element.scrollLeft = 0;
+      }
+    }
+    for (const element of [root, ...root.querySelectorAll('*')]) {
+      if (clonedDocument.defaultView.getComputedStyle(element).position === 'sticky') {
+        set(element, 'position', 'relative');
+        set(element, 'top', 'auto');
+        set(element, 'bottom', 'auto');
+      }
+    }
+    // Work from inner scroll areas outwards; offsetHeight includes padding/borders.
+    for (const entry of [...plan.geometry].reverse()) {
+      if (!entry.expand && entry.index !== 0) continue;
+      const element = nodes[entry.index];
+      const height = Math.max(element.scrollHeight + element.offsetHeight - element.clientHeight, element.getBoundingClientRect().height);
+      set(element, 'height', Math.ceil(height) + 'px');
+    }
+    // Its position inside the page should not constrain the isolated capture.
+    set(root, 'bottom', 'auto');
+    set(root, 'max-height', 'none');
+  }
+
+  function prepareCaptureClone(clonedDocument, captureRoot = null) {
+    const view = clonedDocument.defaultView;
+    // Sticky toolbars can move from normal flow to the top after scrolling.
+    // Detect compact action groups, not a particular edge or scroll position.
+    // Visibility preserves the original layout and crop coordinates.
+    for (const element of (captureRoot ? [captureRoot, ...captureRoot.querySelectorAll('*')] : clonedDocument.querySelectorAll('*'))) {
+      const style = view.getComputedStyle(element);
+      const box = element.getBoundingClientRect();
+      if (box.height <= 0 || box.height > Math.min(180, view.innerHeight * 0.3)) continue;
+      const controls = element.querySelectorAll('button, [role="button"], a[href], input[type="button"], input[type="submit"]');
+      const text = (element.textContent || '').replace(/\s+/g, ' ').trim();
+      if (text.length >= 1200) continue;
+      const toolbarLike = element.matches('nav,header,[role="toolbar"]')
+        || /toolbar|action[-_ ]?bar/i.test(`${element.id} ${element.className}`);
+      const isFloatingActions = !captureRoot && box.width >= 240 && controls.length >= 2
+        && (style.position === 'fixed' || (style.position === 'sticky' && toolbarLike));
+      // WOS may position an outer wrapper while the action group itself is static.
+      // Require multiple distinctive labels so article metadata is not mistaken for UI.
+      const isWos = /(^|\.)(webofscience\.com|clarivate\.(com|cn))$/i.test(location.hostname);
+      const wosFullText = /出版商处的全文|全文链接|Full text links|Full text at publisher/i.test(text);
+      const wosActions = /添加到标记|标记结果列表|Add to marked|Marked List/i.test(text);
+      const isWosActionGroup = isWos && wosFullText && wosActions && /导出|Export/i.test(text);
+      const label = [element.getAttribute('aria-label'), element.getAttribute('title'), element.id, typeof element.className === 'string' ? element.className : ''].join(' ');
+      const isHelpWidget = style.position === 'fixed' && box.width <= 240 && box.height <= 180
+        && /help|support|chat|帮助|客服/i.test(label);
+      if (element === captureRoot || (!isFloatingActions && !isWosActionGroup && !isHelpWidget)) continue;
+      element.setAttribute('data-html2canvas-ignore', 'true');
+      element.style.setProperty('visibility', 'hidden', 'important');
+      // Descendants may explicitly set visibility:visible.
+      for (const child of element.querySelectorAll('*')) child.style.setProperty('visibility', 'hidden', 'important');
+    }
+    normalizeCaptureColors(clonedDocument, captureRoot);
+  }
+
+  // html2canvas 1.4 cannot parse modern CSS colors. Normalize only its cloned DOM.
+  function normalizeCaptureColors(clonedDocument, captureRoot = null) {
+    const view = clonedDocument.defaultView;
+    const canvas = clonedDocument.createElement('canvas');
+    canvas.width = canvas.height = 1;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const cache = new Map();
+    const modern = /\b(?:oklch|oklab|lch|lab|color-mix|color|light-dark)\(/i;
+    const properties = [
+      'color', 'background-color', 'background-image',
+      'border-top-color', 'border-right-color', 'border-bottom-color', 'border-left-color',
+      'outline-color', 'text-decoration-color', 'text-emphasis-color', 'column-rule-color',
+      'box-shadow', 'text-shadow', 'fill', 'stroke', 'stop-color', 'flood-color',
+      'lighting-color', '-webkit-text-fill-color', '-webkit-text-stroke-color'
+    ];
+    function rgb(token) {
+      if (cache.has(token)) return cache.get(token);
+      if (!ctx || !view.CSS.supports('color', token)) throw new Error('无法转换页面颜色：' + token);
+      ctx.clearRect(0, 0, 1, 1);
+      ctx.fillStyle = token;
+      ctx.fillRect(0, 0, 1, 1);
+      const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
+      const converted = 'rgba(' + [r, g, b, a / 255].join(',') + ')';
+      cache.set(token, converted);
+      return converted;
+    }
+    function normalize(value) {
+      let match;
+      while ((match = modern.exec(value))) {
+        let end = match.index + match[0].length;
+        let depth = 1;
+        while (end < value.length && depth) {
+          if (value[end] === '(') depth++;
+          if (value[end] === ')') depth--;
+          end++;
+        }
+        if (depth) break;
+        value = value.slice(0, match.index) + rgb(value.slice(match.index, end)) + value.slice(end);
+      }
+      return value;
+    }
+    const updates = [];
+    const pseudoRules = [];
+    let index = 0;
+    for (const element of (captureRoot ? [captureRoot, ...captureRoot.querySelectorAll('*')] : clonedDocument.querySelectorAll('*'))) {
+      // Read computed values before writing to avoid inherited-color changes.
+      for (const pseudo of [null, '::before', '::after']) {
+        const computed = view.getComputedStyle(element, pseudo);
+        if (pseudo && ['none', 'normal'].includes(computed.content)) continue;
+        const declarations = [];
+        for (const property of properties) {
+          const value = computed.getPropertyValue(property);
+          if (modern.test(value)) declarations.push([property, normalize(value)]);
+        }
+        if (!declarations.length) continue;
+        if (pseudo) {
+          const id = String(index++);
+          element.setAttribute('data-wos-capture-color', id);
+          // One unique selector per pseudo, without relying on page IDs or classes.
+          pseudoRules.push({ element, pseudo, declarations });
+        } else updates.push({ element, declarations });
+      }
+    }
+    for (const { element, declarations } of updates) {
+      for (const [property, value] of declarations) element.style.setProperty(property, value, 'important');
+    }
+    const sheet = clonedDocument.createElement('style');
+    sheet.textContent = pseudoRules.map(({ element, pseudo, declarations }) =>
+      '[data-wos-capture-color="' + element.getAttribute('data-wos-capture-color') + '"]' + pseudo +
+      '{' + declarations.map(([key, value]) => key + ':' + value + '!important').join(';') + '}'
+    ).join('\n');
+    (clonedDocument.head || clonedDocument.documentElement).appendChild(sheet);
   }
 
   // --- 高保真直出 PDF 引擎 ---
@@ -318,6 +609,66 @@
     link.click();
     link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function freezeCaptureScroll() {
+    const viewport = { x: window.scrollX, y: window.scrollY, width: document.documentElement.clientWidth, height: window.innerHeight };
+    const positions = new Map();
+    const attribute = 'data-wos-scroll-' + Math.random().toString(36).slice(2);
+    for (const element of document.querySelectorAll('*')) {
+      if (element.scrollHeight > element.clientHeight || element.scrollWidth > element.clientWidth) {
+        const id = String(positions.size);
+        positions.set(element, { left: element.scrollLeft, top: element.scrollTop, id });
+        element.setAttribute(attribute, id);
+      }
+    }
+    const prevent = event => { if (event.cancelable) event.preventDefault(); };
+    const keydown = event => {
+      if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','PageUp','PageDown','Home','End',' '].includes(event.key)) prevent(event);
+    };
+    const keepPosition = event => {
+      const element = event.target;
+      if (element === document || element === document.documentElement || element === document.body) {
+        if (window.scrollX !== viewport.x || window.scrollY !== viewport.y) {
+          window.scrollTo({ left: viewport.x, top: viewport.y, behavior: 'instant' });
+        }
+      } else {
+        const position = positions.get(element);
+        if (position && (element.scrollLeft !== position.left || element.scrollTop !== position.top)) {
+          element.scrollTo({ ...position, behavior: 'instant' });
+        }
+      }
+    };
+    window.addEventListener('wheel', prevent, { capture: true, passive: false });
+    window.addEventListener('touchmove', prevent, { capture: true, passive: false });
+    window.addEventListener('keydown', keydown, true);
+    window.addEventListener('scroll', keepPosition, true);
+    // Scroll events may be delayed in background tabs or by page scripts.
+    const restorePositions = () => {
+      if (window.scrollX !== viewport.x || window.scrollY !== viewport.y) window.scrollTo({ left: viewport.x, top: viewport.y, behavior: 'instant' });
+      for (const [element, position] of positions) {
+        if (element.isConnected && (element.scrollLeft !== position.left || element.scrollTop !== position.top)) element.scrollTo({ left: position.left, top: position.top, behavior: 'instant' });
+      }
+    };
+    const watchdog = setInterval(restorePositions, 50);
+    return {
+      viewport,
+      restoreClone(doc) {
+        for (const position of positions.values()) {
+          const element = doc.querySelector(`[${attribute}="${position.id}"]`);
+          if (element) { element.scrollLeft = position.left; element.scrollTop = position.top; element.removeAttribute(attribute); }
+        }
+      },
+      restore() {
+        clearInterval(watchdog);
+        restorePositions();
+        for (const element of positions.keys()) element.removeAttribute(attribute);
+        window.removeEventListener('wheel', prevent, true);
+        window.removeEventListener('touchmove', prevent, true);
+        window.removeEventListener('keydown', keydown, true);
+        window.removeEventListener('scroll', keepPosition, true);
+      }
+    };
   }
 
   async function exportElementToPdf(targetElement, options = {}) {
@@ -341,9 +692,18 @@
 
     const requested = Number(options.resolutionScale || currentResolutionScale || 3.0);
     const requestedScale = Number.isFinite(requested) && requested > 0 ? Math.min(4, requested) : 3;
-    const scale = getSafeScale(targetElement, requestedScale);
+    const capture = options.captureRect;
+    let scrollPlan = null;
+    let clonedBoundaries = null;
+    let scale = getSafeScale(capture ? {
+      getBoundingClientRect: () => capture, scrollWidth: capture.width, scrollHeight: capture.height
+    } : targetElement, requestedScale);
     const mode = options.exportMode || currentExportMode || 'a4';
     const outputFormat = ['pdf', 'png', 'jpeg'].includes(options.outputFormat) ? options.outputFormat : 'pdf';
+    const defaults = outputFormat !== 'pdf' ? { top: 0, bottom: 0, left: 0, right: 0 }
+      : mode === 'a4' ? { top: 12, bottom: 12, left: 10, right: 10 }
+      : { top: 6, bottom: 6, left: 6, right: 6 };
+    let margins = defaults;
     const usePng = options.losslessPng !== undefined ? options.losslessPng : currentLosslessPng;
     let format = usePng ? 'PNG' : 'JPEG';
     let mimeType = usePng ? 'image/png' : 'image/jpeg';
@@ -359,40 +719,78 @@
     if (primaryBtn) {
       originalBtnText = primaryBtn.innerHTML;
       primaryBtn.classList.add('loading');
-      primaryBtn.innerHTML = `<span>⏳ 正在生成 PDF...</span>`;
+      primaryBtn.innerHTML = `<span>⏳ 正在生成 ${outputFormat.toUpperCase()}...</span>`;
     }
 
+    const formatUpper = outputFormat.toUpperCase();
     if (scale < requestedScale - 0.05) {
       showToast(`⏳ 内容较长，已自动调整为 ${scale.toFixed(1)}x 渲染以保障稳定性`, 'info', 3500);
     } else {
-      showToast(`⏳ 正在以 ${scale}x 高保真渲染 PDF，请稍候...`, 'info', 3500);
+      showToast(`⏳ 正在以 ${scale}x 高保真渲染 ${formatUpper}，请稍候...`, 'info', 3500);
     }
 
     let restoreExtensionUi = () => {};
+    let scrollLock;
+    let canvas;
+    let cloneFrame;
     isExporting = true;
     try {
+      scrollLock = freezeCaptureScroll();
+      const saved = options.margins === undefined && typeof chrome !== 'undefined' && chrome.storage?.local
+        ? (await chrome.storage.local.get(['wos_margins'])).wos_margins : options.margins;
+      margins = Object.fromEntries(Object.entries(defaults).map(([edge, fallback]) => {
+        const value = saved?.[edge];
+        const n = Number(value);
+        return [edge, value === null || value === undefined || value === '' || !Number.isFinite(n) ? fallback : Math.max(0, Math.min(50, n))];
+      }));
       restoreExtensionUi = hideExtensionUi();
+      showToast(`⏳ 正在生成 ${formatUpper}，页面滚动已暂时锁定…`, 'info', 0);
 
       await waitForRenderableAssets(targetElement);
+      if (!targetElement.isConnected) throw new Error('选中的内容已被页面移除，请重新选择');
+      if (options.fullScroll) {
+        scrollPlan = createScrollCapturePlan(targetElement);
+        scrollPlan.mark();
+      }
 
-      let canvas = await html2canvas(targetElement, {
+      const renderOptions = {
         scale: scale,
         useCORS: true,
         allowTaint: false,
         logging: false,
         backgroundColor: '#ffffff',
-        windowWidth: document.documentElement.offsetWidth,
-        scrollX: window.scrollX,
-        scrollY: window.scrollY
-      });
+        onclone: (doc, root) => {
+          cloneFrame = doc.defaultView.frameElement;
+          scrollLock.restoreClone(doc);
+          if (scrollPlan) {
+            expandScrollCapture(doc, root, scrollPlan);
+            prepareCaptureClone(doc, root);
+            const bounds = root.getBoundingClientRect();
+            clonedBoundaries = [...root.querySelectorAll('h1,h2,h3,p,li,tr,figure,section')].map(el => el.getBoundingClientRect().bottom - bounds.top).filter(y => y > 0 && y < bounds.height);
+            scale = getSafeScale({ getBoundingClientRect: () => bounds, scrollWidth: bounds.width, scrollHeight: bounds.height }, requestedScale);
+            if (scale < 0.75) throw new Error('滚动内容过长，请缩小范围后导出');
+            renderOptions.scale = scale;
+            renderOptions.width = Math.ceil(bounds.width);
+            renderOptions.height = Math.ceil(bounds.height);
+          } else prepareCaptureClone(doc);
+        },
+        windowWidth: scrollLock.viewport.width,
+        windowHeight: scrollLock.viewport.height,
+        scrollX: scrollLock.viewport.x,
+        scrollY: scrollLock.viewport.y,
+        ...(capture ? { x: capture.x, y: capture.y, width: capture.width, height: capture.height } : {})
+      };
+      canvas = await html2canvas(capture ? document.documentElement : targetElement, renderOptions);
+      if (!canvas.width || !canvas.height) throw new Error('导出范围为空，请重新选择');
 
       const cropTopPx = Math.max(0, Math.round(Number(options.cropTop || 0) * scale));
       const cropBottomPx = Math.min(canvas.height, Math.round(Number(options.cropBottom || (canvas.height / scale)) * scale));
-      if (cropBottomPx - cropTopPx > 2 && (cropTopPx > 0 || cropBottomPx < canvas.height)) {
+      const cropWidthPx = Math.min(canvas.width, Math.max(1, Math.round(Number(options.cropWidth ?? (canvas.width / scale)) * scale)));
+      if (cropBottomPx > cropTopPx && (cropTopPx > 0 || cropBottomPx < canvas.height || cropWidthPx < canvas.width)) {
         const croppedCanvas = document.createElement('canvas');
-        croppedCanvas.width = canvas.width;
+        croppedCanvas.width = cropWidthPx;
         croppedCanvas.height = cropBottomPx - cropTopPx;
-        croppedCanvas.getContext('2d').drawImage(canvas, 0, cropTopPx, canvas.width, croppedCanvas.height, 0, 0, canvas.width, croppedCanvas.height);
+        croppedCanvas.getContext('2d').drawImage(canvas, 0, cropTopPx, cropWidthPx, croppedCanvas.height, 0, 0, cropWidthPx, croppedCanvas.height);
         canvas.width = 0;
         canvas.height = 0;
         canvas = croppedCanvas;
@@ -403,31 +801,43 @@
 
       const fileName = getRequestedFileName(options.fileName);
       if (outputFormat !== 'pdf') {
+        const padding = Object.fromEntries(Object.entries(margins).map(([edge, mm]) => [edge, Math.round(mm * 96 / 25.4 * scale)]));
+        if (Object.values(padding).some(value => value > 0)) {
+          const width = canvas.width + padding.left + padding.right;
+          const height = canvas.height + padding.top + padding.bottom;
+          if (width > MAX_CANVAS_EDGE || height > MAX_CANVAS_EDGE || width * height > MAX_RENDER_PIXELS) {
+            throw new Error('添加留白后图片过大，请降低倍率或缩小选区');
+          }
+          const padded = document.createElement('canvas');
+          padded.width = width;
+          padded.height = height;
+          const ctx = padded.getContext('2d');
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, width, height);
+          ctx.drawImage(canvas, padding.left, padding.top);
+          canvas.width = 0;
+          canvas.height = 0;
+          canvas = padded;
+        }
         await downloadCanvasAsImage(canvas, fileName, outputFormat);
-        showToast(`✅ ${outputFormat.toUpperCase()} 图片已生成并开始下载`, 'success', 3000);
-        return;
-      }
-
-      if (usePng && canvas.width * canvas.height > 24 * 1024 * 1024) {
-        format = 'JPEG';
-        mimeType = 'image/jpeg';
-        quality = 0.96;
-        showToast('ℹ️ 超长内容已使用高质量 JPEG，以避免 PDF 过大或生成失败', 'info', 3500);
+        showToast(`✅ ${outputFormat.toUpperCase()} ${canvas.width} × ${canvas.height} px · ${scale.toFixed(2)}× · 已开始下载`, 'success', 5000);
+        return true;
       }
 
       const wantsAdaptive = mode === 'adaptive' || mode === 'continuous';
-      const isAdaptive = wantsAdaptive && Math.max(canvas.width, canvas.height) / scale * 25.4 / 96 + 12 <= MAX_CONTINUOUS_HEIGHT_MM;
+      const isAdaptive = wantsAdaptive
+        && canvas.width / scale * 25.4 / 96 + margins.left + margins.right <= MAX_CONTINUOUS_HEIGHT_MM
+        && canvas.height / scale * 25.4 / 96 + margins.top + margins.bottom <= MAX_CONTINUOUS_HEIGHT_MM;
       if (wantsAdaptive && !isAdaptive) showToast('选区超出单页尺寸上限，已切换 A4 分页', 'info', 4000);
 
       if (isAdaptive) {
         // 根据图形实际长宽等比自适应单页 PDF (以 96 DPI CSS 像素精确换算为毫米)
-        const marginMm = 6;
         const cssWidth = canvas.width / scale;
         const cssHeight = canvas.height / scale;
         const contentWidthMm = (cssWidth * 25.4) / 96;
         const contentHeightMm = (cssHeight * 25.4) / 96;
-        const pageWidthMm = Math.min(MAX_CONTINUOUS_HEIGHT_MM, Math.round((contentWidthMm + marginMm * 2) * 10) / 10);
-        const pageHeightMm = Math.min(MAX_CONTINUOUS_HEIGHT_MM, Math.round((contentHeightMm + marginMm * 2) * 10) / 10);
+        const pageWidthMm = contentWidthMm + margins.left + margins.right;
+        const pageHeightMm = contentHeightMm + margins.top + margins.bottom;
         const isLandscape = pageWidthMm > pageHeightMm;
 
         const pdf = new JsPDFClass({
@@ -438,7 +848,7 @@
         setPdfMetadata(pdf, fileName);
 
         const imgData = canvas.toDataURL(mimeType, quality);
-        pdf.addImage(imgData, format, marginMm, marginMm, contentWidthMm, contentHeightMm, undefined, 'FAST');
+        pdf.addImage(imgData, format, margins.left, margins.top, contentWidthMm, contentHeightMm, undefined, 'FAST');
         pdf.save(fileName);
       } else {
         // 标准 A4 多页分页
@@ -446,13 +856,11 @@
         setPdfMetadata(pdf, fileName);
         const pageWidthMm = 210;
         const pageHeightMm = 297;
-        const marginX = 10;
-        const marginY = 12;
-        const printWidthMm = pageWidthMm - (marginX * 2);
-        const printHeightMm = pageHeightMm - (marginY * 2);
+        const printWidthMm = pageWidthMm - margins.left - margins.right;
+        const printHeightMm = pageHeightMm - margins.top - margins.bottom;
 
         const pageHeightPx = Math.floor((printHeightMm * canvas.width) / printWidthMm);
-        const preferredBreaks = getPreferredPageBreaks(targetElement, canvas.height, pageHeightPx, scale, Number(options.cropTop || 0));
+        const preferredBreaks = getPreferredPageBreaks(capture ? document.documentElement : targetElement, canvas.height, pageHeightPx, scale, capture ? capture.y : Number(options.cropTop || 0), clonedBoundaries);
 
         const sliceCanvas = document.createElement('canvas');
         sliceCanvas.width = canvas.width;
@@ -488,18 +896,10 @@
           }
 
           const sliceData = sliceCanvas.toDataURL(mimeType, quality);
-          pdf.addImage(sliceData, format, marginX, marginY, printWidthMm, currentSliceHeightMm, undefined, 'FAST');
+          pdf.addImage(sliceData, format, margins.left, margins.top, printWidthMm, currentSliceHeightMm, undefined, 'FAST');
 
           renderedHeightPx += currentSlicePx;
           pageCount++;
-        }
-
-        const totalPages = pdf.getNumberOfPages();
-        for (let page = 1; page <= totalPages; page++) {
-          pdf.setPage(page);
-          pdf.setFontSize(8);
-          pdf.setTextColor(100);
-          pdf.text(`${page} / ${totalPages}`, pageWidthMm - marginX, pageHeightMm - 5, { align: 'right' });
         }
 
         pdf.save(fileName);
@@ -507,12 +907,18 @@
         sliceCanvas.height = 0;
       }
 
-      showToast(`✅ PDF 生成成功，已开始下载！`, 'success', 3000);
+      showToast(`✅ ${formatUpper} 生成成功，已开始下载！`, 'success', 3000);
+      return true;
     } catch (err) {
       console.error('PDF 生成异常:', err);
       showToast('❌ 生成失败: ' + (err.message || '未知错误'), 'warning', 4000);
+      return false;
     } finally {
       isExporting = false;
+      scrollLock?.restore();
+      scrollPlan?.restore();
+      cloneFrame?.remove();
+      if (canvas) { canvas.width = 0; canvas.height = 0; }
       restoreExtensionUi();
       if (primaryBtn && originalBtnText) {
         primaryBtn.classList.remove('loading');
@@ -528,155 +934,457 @@
   let closeAdjuster = null;
 
   function startSmartPreview(options = {}) {
-    if (isPicking || isExporting) return;
-    if (closeAdjuster) closeAdjuster();
+    if (isExporting) { showToast('正在生成文件，请等待当前导出完成', 'info', 2500); return false; }
+    if (isPicking || closeAdjuster) { showToast('已有截图选区，请在当前选区中确认导出或取消', 'info', 3000); return false; }
     const target = findSmartContentContainer();
     if (!target) {
-      showToast('未识别到阅读区，请使用“选择页面区块”', 'warning', 3500);
+      showToast('未识别到主体阅读区，请在页面上手动选择', 'warning', 3500);
       startElementPicker(options);
-      return;
+      return true;
     }
 
-    openRegionAdjuster(target, options);
+    // 视觉引导：平滑滚动主体进入视口
+    const rect = target.getBoundingClientRect();
+    const isInView = rect.top >= 50 && rect.bottom <= window.innerHeight - 50;
+    if (!isInView) {
+      try {
+        target.scrollIntoView({ behavior: 'instant', block: 'start' });
+      } catch (_) {}
+    }
 
+    openRegionAdjuster(target, options, 'smart');
+    return true;
   }
 
-  function openRegionAdjuster(target, options = {}) {
+  function openRegionAdjuster(target, options = {}, source = 'manual') {
+    const scrollTarget = findScrollCaptureTarget(target);
+    let fullScroll = Boolean(scrollTarget);
     if (closeAdjuster) closeAdjuster();
     const rect = target.getBoundingClientRect();
     if (rect.width < 1 || rect.height < 1) return;
+
     const baseTop = rect.top + window.scrollY;
     const baseBottom = rect.bottom + window.scrollY;
-    const state = { top: baseTop, bottom: baseBottom, dragging: null };
-    const MIN_HEIGHT = Math.min(24, rect.height);
+    const baseLeft = Math.max(0, rect.left + window.scrollX);
+    const baseRight = baseLeft + rect.width;
+    const initialCoords = { left: baseLeft, top: baseTop, right: baseRight, bottom: baseBottom };
 
+    const pageHeight = () => Math.max(document.documentElement.scrollHeight, document.body.scrollHeight, window.innerHeight);
+    const pageWidth = () => Math.max(document.documentElement.scrollWidth, document.body.scrollWidth, window.innerWidth);
+    const state = { left: baseLeft, top: baseTop, right: baseRight, bottom: baseBottom, dragging: null };
+    const MIN_SIZE = 1;
+    let exportPending = false;
+    let estimatedHeight = 0;
+    if (scrollTarget) {
+      let extra = 0;
+      for (const element of scrollTarget.querySelectorAll('*')) {
+        if (/(auto|scroll|overlay)/.test(getComputedStyle(element).overflowY)) extra = Math.max(extra, element.scrollHeight - element.clientHeight);
+      }
+      estimatedHeight = Math.max(scrollTarget.scrollHeight, scrollTarget.getBoundingClientRect().height + extra);
+    }
+
+    // 遮罩与顶部引导条
+    const maskOverlay = createMaskOverlay();
+    const bannerPrompt = source === 'smart'
+      ? '已自动识别正文主体 · 拖动手柄调整选区 · Enter 确认导出'
+      : '已锁定选区 · 拖动手柄调整边界 · 拖动框体平移 · Enter 确认导出';
+    const guidanceBanner = createGuidanceBanner(source === 'smart' ? '✨' : '📐', bannerPrompt, ['Enter 导出', '方向键 微调', 'Esc 取消']);
+
+    // 选区调整框
     const adjuster = document.createElement('div');
     adjuster.id = 'wos-region-adjuster';
+    adjuster.setAttribute('data-html2canvas-ignore', 'true');
     adjuster.innerHTML = `
+      <div class="wos-region-move-surface" data-edge="move" title="按住拖动平移整个选区"></div>
       <div class="wos-region-frame"></div>
-      <button type="button" class="wos-region-handle top" data-edge="top" aria-label="拖动调整选区上边缘" title="拖动调整上边缘"><i></i></button>
-      <button type="button" class="wos-region-handle bottom" data-edge="bottom" aria-label="拖动调整选区下边缘" title="拖动调整下边缘"><i></i></button>
+      <div class="wos-region-hud">
+        <span class="wos-region-hud-dot"></span>
+        <span class="wos-region-hud-dim">0 × 0 px</span>
+        <span class="wos-region-hud-meta">${(options.outputFormat || currentOutputFormat).toUpperCase()} · ${options.resolutionScale || currentResolutionScale}×</span>
+      </div>
+      <button type="button" class="wos-region-handle top" data-edge="top" aria-label="拖动调整上边缘" title="拖动调整上边缘"><i></i></button>
+      <button type="button" class="wos-region-handle bottom" data-edge="bottom" aria-label="拖动调整下边缘" title="拖动调整下边缘"><i></i></button>
+      <button type="button" class="wos-region-handle left" data-edge="left" aria-label="拖动调整左边缘" title="拖动调整左边缘"><i></i></button>
+      <button type="button" class="wos-region-handle right" data-edge="right" aria-label="拖动调整右边缘" title="拖动调整右边缘"><i></i></button>
+      <button type="button" class="wos-region-handle top-left" data-edge="top-left" aria-label="拖动调整左上角" title="拖动调整左上角"></button>
+      <button type="button" class="wos-region-handle top-right" data-edge="top-right" aria-label="拖动调整右上角" title="拖动调整右上角"></button>
+      <button type="button" class="wos-region-handle bottom-left" data-edge="bottom-left" aria-label="拖动调整左下角" title="拖动调整左下角"></button>
+      <button type="button" class="wos-region-handle bottom-right" data-edge="bottom-right" aria-label="拖动调整右下角" title="拖动调整右下角"></button>
     `;
+
+    // 智能吸附操作面板
     const panel = document.createElement('div');
     panel.id = 'wos-region-adjuster-panel';
+    panel.setAttribute('data-html2canvas-ignore', 'true');
     panel.innerHTML = `
-      <span class="wos-region-tip">拖动上下边缘 · 聚焦手柄后 ↑↓ 微调</span>
-      <button type="button" data-action="export">导出此区域</button>
-      <button type="button" data-action="repick">重选</button>
-      <button type="button" data-action="cancel" aria-label="取消选区">✕</button>
+      <div class="wos-region-size-inputs">
+        <span>宽</span><input type="number" data-size="width" aria-label="选区宽度" min="1" step="1">
+        <span>× 高</span><input type="number" data-size="height" aria-label="选区高度" min="1" step="1">
+        <span>px</span>
+      </div>
+      <button type="button" data-action="reset-size" title="恢复为最初识别/选取的尺寸">↺ 原始尺寸</button>
+      <div class="wos-region-divider"></div>
+      <button type="button" data-action="export" title="导出此选区 (Enter)">✨ 确认导出</button>
+      <button type="button" data-action="repick" title="重新在页面上选择区块">🎯 重选</button>
+      <button type="button" data-action="cancel" title="取消并退出 (Esc)">✕</button>
     `;
-    document.body.append(adjuster, panel);
+    document.documentElement.append(adjuster, panel);
+
+    if (scrollTarget) {
+      const mode = document.createElement('select');
+      mode.className = 'wos-region-scroll-mode';
+      mode.setAttribute('aria-label', '截图范围模式');
+      mode.innerHTML = '<option value="scroll">完整滚动区域（自动展开全部内容）</option><option value="page">页面矩形（手动调整大小）</option>';
+      panel.querySelector('.wos-region-size-inputs').before(mode);
+      mode.addEventListener('change', () => { finishDrag(); fullScroll = mode.value === 'scroll'; render(); });
+    }
+
+    const hud = adjuster.querySelector('.wos-region-hud');
+    const hudDim = hud.querySelector('.wos-region-hud-dim');
+    const hudMeta = hud.querySelector('.wos-region-hud-meta');
+    const widthInput = panel.querySelector('[data-size="width"]');
+    const heightInput = panel.querySelector('[data-size="height"]');
 
     const render = () => {
-      if (!target.isConnected) { close(); return; }
-      const currentRect = target.getBoundingClientRect();
-      const top = currentRect.top + state.top - baseTop;
-      const bottom = currentRect.top + state.bottom - baseTop;
-      adjuster.style.left = `${currentRect.left}px`;
-      adjuster.style.width = `${currentRect.width}px`;
-      adjuster.style.top = `${top}px`;
-      adjuster.style.height = `${Math.max(MIN_HEIGHT, bottom - top)}px`;
-      const panelTop = bottom + 10 <= window.innerHeight - 46 ? bottom + 10 : Math.max(10, top - 46);
-      panel.style.top = `${Math.max(10, Math.min(panelTop, window.innerHeight - panel.offsetHeight - 10))}px`;
-      panel.style.left = `${Math.max(12, Math.min(currentRect.left, window.innerWidth - panel.offsetWidth - 12))}px`;
+      if (exportPending) return;
+      guidanceBanner.update(fullScroll ? '📜' : '📐', fullScroll
+        ? '将导出整个滚动容器（包括标题）· 高度为估算，文件尺寸以实际展开为准'
+        : '拖动边缘调整 · 拖动框体或方向键平移 · 聚焦手柄后方向键微调', ['Enter 导出', 'Esc 取消']);
+      panel.querySelector('[data-action="reset-size"]').disabled = fullScroll;
+      const currentWidth = state.right - state.left;
+      const currentHeight = state.bottom - state.top;
+      widthInput.disabled = heightInput.disabled = fullScroll;
+      adjuster.querySelectorAll('.wos-region-handle, .wos-region-move-surface').forEach(el => {
+        el.hidden = fullScroll;
+        el.style.display = fullScroll ? 'none' : '';
+      });
+
+      let viewRect;
+      if (fullScroll) {
+        const bounds = scrollTarget.getBoundingClientRect();
+        viewRect = { left: bounds.left, top: bounds.top, width: bounds.width, height: bounds.height };
+        Object.assign(adjuster.style, {
+          left: `${bounds.left}px`,
+          top: `${bounds.top}px`,
+          width: `${bounds.width}px`,
+          height: `${bounds.height}px`
+        });
+        widthInput.value = String(Math.round(bounds.width));
+        heightInput.value = String(Math.round(estimatedHeight));
+        hudDim.textContent = `${Math.round(bounds.width)} × 约 ${Math.round(estimatedHeight)} px`;
+        hudMeta.textContent = '完整滚动区域';
+        hud.classList.toggle('flipped', bounds.top < 42);
+        maskOverlay.update(bounds);
+      } else {
+        const top = state.top - window.scrollY;
+        const left = state.left - window.scrollX;
+        const width = Math.max(MIN_SIZE, currentWidth);
+        const height = Math.max(MIN_SIZE, currentHeight);
+        viewRect = { left, top, width, height };
+
+        adjuster.style.left = `${left}px`;
+        adjuster.style.top = `${top}px`;
+        adjuster.style.width = `${width}px`;
+        adjuster.style.height = `${height}px`;
+
+        widthInput.max = String(pageWidth() - state.left);
+        heightInput.max = String(pageHeight() - state.top);
+        if (document.activeElement !== widthInput) widthInput.value = String(Math.round(width));
+        if (document.activeElement !== heightInput) heightInput.value = String(Math.round(height));
+
+        hudDim.textContent = `${Math.round(width)} × ${Math.round(height)} px`;
+        hudMeta.textContent = `${(options.outputFormat || currentOutputFormat).toUpperCase()} · ${options.resolutionScale || currentResolutionScale}×`;
+        hud.classList.toggle('flipped', top < 42);
+
+        maskOverlay.update(viewRect);
+      }
+
+      // 智能吸附操作面板定位 (跟随选区)
+      const panelWidth = panel.offsetWidth || 360;
+      const panelHeight = panel.offsetHeight || 44;
+
+      let panelTop = viewRect.top + viewRect.height + 12;
+      if (panelTop + panelHeight > window.innerHeight - 12) {
+        panelTop = viewRect.top - panelHeight - 12;
+      }
+      if (panelTop < 12) {
+        panelTop = window.innerHeight - panelHeight - 16;
+      }
+      let panelLeft = viewRect.left + (viewRect.width - panelWidth) / 2;
+      panelLeft = Math.max(12, Math.min(window.innerWidth - panelWidth - 12, panelLeft));
+
+      panel.style.top = `${Math.max(12, Math.min(window.innerHeight - panelHeight - 12, panelTop))}px`;
+      panel.style.left = `${panelLeft}px`;
+      panel.style.bottom = 'auto';
+      panel.style.right = 'auto';
+    };
+
+    let scrollFrame = 0;
+    let pointerX = 0;
+    let pointerY = 0;
+    let grabOffsetX = 0;
+    let grabOffsetY = 0;
+
+    const moveEdge = () => {
+      if (!state.dragging) return;
+      const pointX = pointerX + window.scrollX - grabOffsetX;
+      const pointY = pointerY + window.scrollY - grabOffsetY;
+      const pWidth = pageWidth();
+      const pHeight = pageHeight();
+
+      if (state.dragging === 'move') {
+        const w = state.right - state.left;
+        const h = state.bottom - state.top;
+        state.left = Math.max(0, Math.min(pointX, pWidth - w));
+        state.right = state.left + w;
+        state.top = Math.max(0, Math.min(pointY, pHeight - h));
+        state.bottom = state.top + h;
+      } else {
+        if (state.dragging.includes('top')) {
+          state.top = Math.max(0, Math.min(pointY, state.bottom - MIN_SIZE));
+        }
+        if (state.dragging.includes('bottom')) {
+          state.bottom = Math.min(pHeight, Math.max(pointY, state.top + MIN_SIZE));
+        }
+        if (state.dragging.includes('left')) {
+          state.left = Math.max(0, Math.min(pointX, state.right - MIN_SIZE));
+        }
+        if (state.dragging.includes('right')) {
+          state.right = Math.min(pWidth, Math.max(pointX, state.left + MIN_SIZE));
+        }
+      }
+      render();
+    };
+
+    const autoScroll = () => {
+      if (!state.dragging) return;
+      const deltaY = pointerY < 48 ? -16 : pointerY > window.innerHeight - 48 ? 16 : 0;
+      const deltaX = pointerX < 48 ? -16 : pointerX > window.innerWidth - 48 ? 16 : 0;
+      if (deltaY || deltaX) {
+        window.scrollBy(deltaX, deltaY);
+        moveEdge();
+      }
+      scrollFrame = requestAnimationFrame(autoScroll);
+    };
+
+    const onSelectionScroll = () => {
+      if (state.dragging) moveEdge();
+      else render();
     };
 
     const finishDrag = () => {
+      cancelAnimationFrame(scrollFrame);
       state.dragging = null;
-      document.body.classList.remove('wos-region-resizing');
+      document.body.classList.remove(
+        'wos-region-resizing',
+        'wos-moving-region',
+        'wos-resizing-top', 'wos-resizing-bottom', 'wos-resizing-left', 'wos-resizing-right',
+        'wos-resizing-top-left', 'wos-resizing-top-right', 'wos-resizing-bottom-left', 'wos-resizing-bottom-right'
+      );
       document.removeEventListener('pointermove', onPointerMove, true);
       document.removeEventListener('pointerup', finishDrag, true);
       document.removeEventListener('pointercancel', finishDrag, true);
     };
+
     const onPointerMove = (event) => {
       if (!state.dragging) return;
-      const point = event.clientY - target.getBoundingClientRect().top + baseTop;
-      if (state.dragging === 'top') {
-        state.top = Math.max(baseTop, Math.min(point, state.bottom - MIN_HEIGHT));
-      } else {
-        state.bottom = Math.min(baseBottom, Math.max(point, state.top + MIN_HEIGHT));
-      }
-      render();
+      event.preventDefault();
+      pointerX = event.clientX;
+      pointerY = event.clientY;
+      moveEdge();
     };
+
     const startDrag = (event) => {
-      if (event.button !== 0) return;
+      if (event.button !== 0 || fullScroll || exportPending) return;
       event.preventDefault();
       event.stopPropagation();
-      state.dragging = event.currentTarget.dataset.edge;
+      const edge = event.currentTarget.dataset.edge;
+      state.dragging = edge;
+      pointerX = event.clientX;
+      pointerY = event.clientY;
+
+      if (edge === 'move') {
+        grabOffsetX = pointerX + window.scrollX - state.left;
+        grabOffsetY = pointerY + window.scrollY - state.top;
+      } else {
+        if (edge.includes('top')) grabOffsetY = pointerY + window.scrollY - state.top;
+        else if (edge.includes('bottom')) grabOffsetY = pointerY + window.scrollY - state.bottom;
+        else grabOffsetY = 0;
+
+        if (edge.includes('left')) grabOffsetX = pointerX + window.scrollX - state.left;
+        else if (edge.includes('right')) grabOffsetX = pointerX + window.scrollX - state.right;
+        else grabOffsetX = 0;
+      }
+
+      event.currentTarget.setPointerCapture(event.pointerId);
+      scrollFrame = requestAnimationFrame(autoScroll);
       document.body.classList.add('wos-region-resizing');
+      if (edge === 'move') document.body.classList.add('wos-moving-region');
+      else document.body.classList.add(`wos-resizing-${edge}`);
+
       document.addEventListener('pointermove', onPointerMove, true);
       document.addEventListener('pointerup', finishDrag, true);
       document.addEventListener('pointercancel', finishDrag, true);
     };
+
     const close = () => {
       closeAdjuster = null;
       finishDrag();
       adjuster.remove();
       panel.remove();
+      maskOverlay.remove();
+      guidanceBanner.remove();
       document.removeEventListener('keydown', onKeyDown, true);
-      window.removeEventListener('scroll', render, true);
+      window.removeEventListener('scroll', onSelectionScroll, true);
       window.removeEventListener('resize', render, true);
+      window.removeEventListener('blur', finishDrag);
     };
+
+    const triggerExport = async () => {
+      if (exportPending) return;
+      if (!(fullScroll ? scrollTarget : target).isConnected) {
+        showToast('原区域已被页面移除，请重选', 'warning');
+        return;
+      }
+      if (!fullScroll) applySize();
+      const captureRect = {
+        x: Math.max(0, state.left),
+        y: Math.max(0, state.top),
+        width: Math.min(state.right - state.left, pageWidth() - state.left),
+        height: Math.min(state.bottom - state.top, pageHeight() - state.top)
+      };
+      if (captureRect.width < 1 || captureRect.height < 1) {
+        showToast('页面范围已变化，请重新选择', 'warning');
+        return;
+      }
+      finishDrag();
+      exportPending = true;
+      panel.setAttribute('aria-busy', 'true');
+      panel.querySelectorAll('button,input,select').forEach(el => { el.disabled = true; });
+      let success = false;
+      try {
+        success = await exportElementToPdf(fullScroll ? scrollTarget : document.documentElement, {
+          ...options, fullScroll, captureRect: fullScroll ? undefined : captureRect, cropTop: 0, cropBottom: undefined, cropWidth: undefined
+        });
+      } finally {
+        exportPending = false;
+        if (success) close();
+        else {
+          panel.removeAttribute('aria-busy');
+          panel.querySelectorAll('button,input,select').forEach(el => { el.disabled = false; });
+          render();
+        }
+      }
+    };
+
     const onKeyDown = (event) => {
-      if (event.key === 'Escape') close();
-      const edge = event.target.dataset?.edge;
-      if (edge && ['ArrowUp', 'ArrowDown'].includes(event.key)) {
+      if (exportPending) return;
+      if (event.key === 'Escape') {
+        close();
+        showToast('已取消选区', 'info', 1500);
+        return;
+      }
+      if (event.key === 'Enter' && !['INPUT', 'SELECT', 'BUTTON'].includes(document.activeElement?.tagName)) {
         event.preventDefault();
-        const delta = (event.key === 'ArrowUp' ? -1 : 1) * (event.shiftKey ? 10 : 1);
-        state[edge] = edge === 'top' ? Math.max(baseTop, Math.min(state.top + delta, state.bottom - MIN_HEIGHT)) : Math.min(baseBottom, Math.max(state.bottom + delta, state.top + MIN_HEIGHT));
+        triggerExport();
+        return;
+      }
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) {
+        if (fullScroll || ['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement?.tagName) || document.activeElement?.isContentEditable) return;
+        event.preventDefault();
+        const step = event.shiftKey ? 10 : 1;
+        const dx = event.key === 'ArrowLeft' ? -step : event.key === 'ArrowRight' ? step : 0;
+        const dy = event.key === 'ArrowUp' ? -step : event.key === 'ArrowDown' ? step : 0;
+        const edge = document.activeElement?.dataset?.edge;
+        if (edge && edge !== 'move') {
+          if (edge.includes('left')) state.left = Math.max(0, Math.min(state.right - MIN_SIZE, state.left + dx));
+          if (edge.includes('right')) state.right = Math.min(pageWidth(), Math.max(state.left + MIN_SIZE, state.right + dx));
+          if (edge.includes('top')) state.top = Math.max(0, Math.min(state.bottom - MIN_SIZE, state.top + dy));
+          if (edge.includes('bottom')) state.bottom = Math.min(pageHeight(), Math.max(state.top + MIN_SIZE, state.bottom + dy));
+        } else {
+          const x = Math.max(-state.left, Math.min(dx, pageWidth() - state.right));
+          const y = Math.max(-state.top, Math.min(dy, pageHeight() - state.bottom));
+          state.left += x; state.right += x; state.top += y; state.bottom += y;
+        }
         render();
       }
     };
 
-    adjuster.querySelectorAll('.wos-region-handle').forEach(handle => handle.addEventListener('pointerdown', startDrag));
+    adjuster.querySelectorAll('.wos-region-handle, .wos-region-move-surface').forEach(el => el.addEventListener('pointerdown', startDrag));
+
+    const applySize = () => {
+      const w = Number(widthInput.value);
+      const h = Number(heightInput.value);
+      if (Number.isFinite(w) && w >= MIN_SIZE) {
+        state.right = Math.min(pageWidth(), state.left + w);
+      }
+      if (Number.isFinite(h) && h >= MIN_SIZE) {
+        state.bottom = Math.min(pageHeight(), state.top + h);
+      }
+      widthInput.value = String(Math.round(state.right - state.left));
+      heightInput.value = String(Math.round(state.bottom - state.top));
+      render();
+    };
+    [widthInput, heightInput].forEach(input => {
+      input.addEventListener('change', applySize);
+      input.addEventListener('keydown', event => {
+        if (event.key === 'Enter') { event.preventDefault(); applySize(); input.blur(); }
+      });
+    });
+
     panel.addEventListener('click', (event) => {
+      if (exportPending) return;
       const action = event.target.closest('button')?.dataset.action;
       if (action === 'export') {
-        if (!target.isConnected || Math.abs(target.getBoundingClientRect().height - rect.height) > 1) {
-          close();
-          showToast('页面内容尺寸已变化，请重新选择区域', 'warning', 3500);
-          return;
-        }
-        const cropTop = state.top - baseTop;
-        const cropBottom = state.bottom - baseTop;
-        close();
-        exportElementToPdf(target, { ...options, cropTop, cropBottom });
+        triggerExport();
+      } else if (action === 'reset-size') {
+        state.left = initialCoords.left;
+        state.top = initialCoords.top;
+        state.right = initialCoords.right;
+        state.bottom = initialCoords.bottom;
+        render();
       } else if (action === 'repick') {
         close();
         startElementPicker(options);
       } else if (action === 'cancel') {
         close();
+        showToast('已取消选区', 'info', 1500);
       }
     });
+
     document.addEventListener('keydown', onKeyDown, true);
-    window.addEventListener('scroll', render, true);
+    window.addEventListener('scroll', onSelectionScroll, true);
     window.addEventListener('resize', render, true);
+    window.addEventListener('blur', finishDrag);
     closeAdjuster = close;
     render();
   }
 
   function startElementPicker(options = {}) {
-    if (isPicking || isExporting) return;
-    if (closeAdjuster) closeAdjuster();
+    if (isExporting) { showToast('正在生成文件，请等待当前导出完成', 'info', 2500); return false; }
+    if (isPicking || closeAdjuster) { showToast('已有截图选区，请在当前选区中确认导出或取消', 'info', 3000); return false; }
     isPicking = true;
 
-    const banner = document.createElement('div');
-    banner.id = 'wos-picker-banner';
-    banner.innerHTML = `
-      <span>🎯 点击网页区块以锁定选区</span>
-      <span class="wos-banner-key">↑ 选父级 · 锁定后拖动边缘 · ESC 退出</span>
-    `;
-    document.body.appendChild(banner);
-
+    const guidanceBanner = createGuidanceBanner('🎯', '移动鼠标高亮选择区块 · 点击锁定 · [↑] 扩大至父级', ['点击 锁定', '↑ 选父级', 'Esc 退出']);
+    const maskOverlay = createMaskOverlay();
     const marker = createExportTargetMarker();
+
     const refreshMarker = () => {
-      if (currentHighlightedEl) marker.update(currentHighlightedEl, '点击锁定选区');
+      if (currentHighlightedEl?.isConnected) {
+        const tagName = (currentHighlightedEl.tagName || 'DIV').toLowerCase();
+        const className = currentHighlightedEl.className && typeof currentHighlightedEl.className === 'string'
+          ? '.' + currentHighlightedEl.className.trim().split(/\s+/)[0].slice(0, 16) : '';
+        const rect = currentHighlightedEl.getBoundingClientRect();
+        const label = `<${tagName}${className}> ${Math.round(rect.width)} × ${Math.round(rect.height)} px · 点击锁定`;
+        marker.update(currentHighlightedEl, label);
+        maskOverlay.update(rect);
+      }
     };
 
     function onMouseMove(e) {
       if (!isPicking) return;
       const target = document.elementFromPoint(e.clientX, e.clientY);
-      if (!target || target.closest('#wos-picker-banner') || target.closest('#wos-pdf-floating-widget')) return;
+      if (!target || target.closest('#wos-guidance-banner,#wos-pdf-floating-widget,#wos-mask-overlay,#wos-export-target-marker')) return;
       if (target === currentHighlightedEl) return;
       if (currentHighlightedEl) currentHighlightedEl.classList.remove('wos-element-highlighted');
       currentHighlightedEl = target;
@@ -686,25 +1394,27 @@
 
     function onClick(e) {
       if (!isPicking) return;
-      if (e.target.closest('#wos-picker-banner,#wos-pdf-floating-widget')) return;
+      if (e.target.closest('#wos-guidance-banner,#wos-pdf-floating-widget,#wos-mask-overlay')) return;
       e.preventDefault();
       e.stopImmediatePropagation();
       const selected = currentHighlightedEl || document.elementFromPoint(e.clientX, e.clientY);
       stopElementPicker();
-      if (selected) openRegionAdjuster(selected, options);
+      if (selected) openRegionAdjuster(selected, options, 'picker');
     }
 
     function onKeyDown(e) {
-      if (e.key === 'ArrowUp' && currentHighlightedEl?.parentElement && currentHighlightedEl.parentElement !== document.body) {
+      if (e.key === 'ArrowUp' && currentHighlightedEl?.parentElement && currentHighlightedEl.parentElement !== document.body && currentHighlightedEl.parentElement !== document.documentElement) {
         e.preventDefault();
         currentHighlightedEl.classList.remove('wos-element-highlighted');
         currentHighlightedEl = currentHighlightedEl.parentElement;
         currentHighlightedEl.classList.add('wos-element-highlighted');
         refreshMarker();
+        const parentTag = currentHighlightedEl.tagName.toLowerCase();
+        guidanceBanner.update('🎯', `已扩大至父级元素: <${parentTag}> · 点击确认锁定`, ['点击 锁定', '↑ 选父级', 'Esc 退出']);
       }
       if (e.key === 'Escape' || e.keyCode === 27) {
         stopElementPicker();
-        showToast('已取消选区', 'info', 1500);
+        showToast('已退出选择', 'info', 1500);
       }
     }
 
@@ -715,7 +1425,8 @@
         currentHighlightedEl = null;
       }
       marker.remove();
-      banner.remove();
+      maskOverlay.remove();
+      guidanceBanner.remove();
       document.removeEventListener('mousemove', onMouseMove, true);
       document.removeEventListener('click', onClick, true);
       document.removeEventListener('keydown', onKeyDown, true);
@@ -728,6 +1439,7 @@
     document.addEventListener('keydown', onKeyDown, true);
     window.addEventListener('resize', refreshMarker, true);
     window.addEventListener('scroll', refreshMarker, true);
+    return true;
   }
   // --- 悬浮操作胶囊更新 ---
   function getOutputLabel() {
@@ -735,10 +1447,13 @@
   }
 
   function updateFloatingBadge() {
+    const label = document.querySelector('#wos-btn-auto-export > span');
+    if (label && !isExporting) label.textContent = `智能导出 ${getOutputLabel()}`;
     const badge = document.getElementById('wos-quick-badge');
     if (badge) {
       const modeText = currentExportMode === 'a4' ? 'A4 纸' : '自适应';
-      badge.textContent = `${currentResolutionScale}x · ${modeText}`;
+      badge.textContent = `${currentResolutionScale}x · ${currentOutputFormat === 'pdf' ? modeText : getOutputLabel()}`;
+      badge.disabled = currentOutputFormat !== 'pdf';
     }
   }
   function initFloatingWidget() {
@@ -752,7 +1467,7 @@
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:2px">
           <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
         </svg>
-        <span>智能导出 PDF</span>
+        <span>智能导出 ${getOutputLabel()}</span>
       </button>
 
       <button class="wos-widget-btn secondary" id="wos-btn-pick-export" title="点击自由选择页面任意区域导出">
@@ -769,6 +1484,8 @@
     `;
 
     document.body.appendChild(widget);
+    widget.setAttribute('data-html2canvas-ignore', 'true');
+    updateFloatingBadge();
 
     const autoBtn = widget.querySelector('#wos-btn-auto-export');
     const pickBtn = widget.querySelector('#wos-btn-pick-export');
@@ -825,10 +1542,13 @@
 
     toast = document.createElement('div');
     toast.id = 'wos-toast-message';
+    toast.setAttribute('data-html2canvas-ignore', 'true');
+    toast.setAttribute('role', 'status');
+    toast.setAttribute('aria-live', 'polite');
     toast.className = type;
     toast.innerText = message;
     document.body.appendChild(toast);
-
+    if (duration <= 0) return;
     setTimeout(() => {
       if (toast && toast.parentNode) {
         toast.parentNode.removeChild(toast);
@@ -837,13 +1557,31 @@
   }
 
   // --- 与扩展通信 ---
+  if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area !== 'local') return;
+      if (['pdf', 'png', 'jpeg'].includes(changes.wos_output_format?.newValue)) currentOutputFormat = changes.wos_output_format.newValue;
+      if (['a4', 'adaptive', 'continuous'].includes(changes.wos_export_mode?.newValue)) currentExportMode = changes.wos_export_mode.newValue;
+      if ([2, 3, 4].includes(Number(changes.wos_resolution_scale?.newValue))) currentResolutionScale = Number(changes.wos_resolution_scale.newValue);
+      if (typeof changes.wos_lossless_png?.newValue === 'boolean') currentLosslessPng = changes.wos_lossless_png.newValue;
+      updateFloatingBadge();
+    });
+  }
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    const launchActions = ['preview_smart','export_smart','export_middle','start_picker'];
+    if (launchActions.includes(request.action) && isExporting) {
+      sendResponse({ success: false, message: '文件正在生成，请等待当前导出完成' });
+      return false;
+    }
+    if (launchActions.includes(request.action) && (isPicking || closeAdjuster)) {
+      showToast('已有截图选区，已为你保留当前窗口', 'info', 2500);
+      sendResponse({ success: true, reused: true, message: '已保留当前选区' });
+      return false;
+    }
     if (request.action === 'preview_smart' || request.action === 'export_smart' || request.action === 'export_middle') {
-      startSmartPreview(request.options);
-      sendResponse({ success: true });
+      sendResponse({ success: startSmartPreview(request.options) !== false });
     } else if (request.action === 'start_picker') {
-      startElementPicker(request.options);
-      sendResponse({ success: true });
+      sendResponse({ success: startElementPicker(request.options) !== false });
     } else if (request.action === 'check_status') {
       const isWos = location.hostname.includes('webofscience') || location.hostname.includes('clarivate');
       sendResponse({
@@ -852,6 +1590,7 @@
         currentScale: currentResolutionScale,
         losslessPng: currentLosslessPng,
         outputFormat: currentOutputFormat,
+        version: CONTENT_VERSION,
       });
     }
     return true;

@@ -1,5 +1,54 @@
 # Changelog
 
+## v3.5.0 - 2026-09-11
+
+### Targeted export reliability
+- Reuse an existing picker/adjuster instead of reopening it; reject launch requests while a file is rendering.
+- Add popup/content version handshake so stale page scripts request a page refresh instead of reinjecting conflicting UI.
+- Verify native browser PNG and PDF download events, plus high-resolution 12,000px drawer downscaling within the canvas edge limit.
+- Detect custom fixed drawers without mistaking an article's nested table for the export target.
+- Expand actual scroll containers and their wrappers only; keep intentional clipping intact.
+- Map clone nodes with temporary capture identifiers, independent of ignored nodes and pseudo-elements; clean identifiers and clone frames on failure.
+- Restore confirmed scroll positions inside the clone and verify live positions during export, including delayed scroll events.
+- Preserve the selection after a failed export, support retry, and display continuous export status.
+- Make guidance click-through; wrap narrow-screen controls and clarify estimated full-scroll dimensions.
+- Align small-size inputs, keyboard movement and focused-edge resizing with the actual output rectangle.
+- Restore no-page-number PDF output and honor lossless PNG encoding without automatic JPEG substitution.
+- Synchronize floating format labels with saved preferences; avoid duplicate file extensions.
+- Add repeatable browser regression coverage using bundled html2canvas and jsPDF.
+
+### Sticky toolbar correction
+- Exclude compact top or bottom fixed/sticky action groups regardless of scroll position.
+- Recognize WOS full-text/export/marked-list groups even when only an outer wrapper is positioned.
+
+### Overlay cleanup
+- Hide bottom fixed/sticky action docks in the capture clone so website toolbars do not obscure article text; retain document layout and the original live page.
+
+### Capture stability
+- Freeze viewport coordinates before asynchronous asset loading, block scroll input while exporting, and release listeners on success or failure.
+
+### Scroll alignment
+- Update the active edge during wheel scrolling while dragging, keeping the opposite edge anchored.
+- Position hover guides in viewport coordinates to avoid body-margin and positioning offsets.
+
+### Color compatibility
+- Convert modern CSS colors to sRGB in the capture clone for html2canvas 1.4 compatibility, including gradients, shadows and pseudo-elements. The original page is not modified.
+
+### Interface
+- Redesign popup as three numbered sections with a scrollable settings area and persistent action footer.
+- Add margin diagram, format-dependent defaults, keyboard focus styles and accessible toggle states.
+- Replace floating selection controls with a compact bottom-right dock and collapsible help.
+- Serialize preference writes; guard repeated launches and keep retryable errors inside the popup.
+
+### Fixed
+- Remove initial-element bounds from vertical dragging and numeric sizing.
+- Capture the page rectangle so expanded selections include adjacent elements.
+- Add pointer capture, edge autoscroll, blur cleanup and larger handle hit areas.
+- Avoid covering handles with the enlarged size control panel where space permits.
+
+### Added
+- Independent saved margins and editable selection width/height.
+
 ## v3.4.0 - 2026-09-11
 
 ### Added

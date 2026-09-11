@@ -141,225 +141,458 @@
   color: #ef4444;
 }
 
-/* --- 自由框选提示条与高亮 --- */
-#wos-picker-banner {
+/* --- 聚光灯暗色遮罩系统 (Spotlight Mask Overlay) --- */
+#wos-mask-overlay {
   position: fixed;
-  top: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 2147483645;
-  background: rgba(15, 23, 42, 0.92);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  color: #ffffff;
-  padding: 10px 22px;
-  border-radius: 30px;
-  font-size: 13.5px;
-  font-weight: 500;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  animation: wosFadeDown 0.3s ease;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  inset: 0;
+  z-index: 2147483642;
+  pointer-events: none;
   user-select: none;
 }
 
-#wos-picker-banner .wos-banner-key {
-  background: rgba(255, 255, 255, 0.2);
-  padding: 2px 7px;
-  border-radius: 4px;
-  font-size: 11px;
-  font-weight: 600;
+.wos-mask-panel {
+  position: fixed;
+  background: rgba(15, 23, 42, 0.52);
+  backdrop-filter: blur(1.5px);
+  -webkit-backdrop-filter: blur(1.5px);
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+  will-change: top, left, width, height;
 }
 
+.wos-mask-panel.top { top: 0; left: 0; width: 100vw; height: 0; }
+.wos-mask-panel.bottom { left: 0; width: 100vw; bottom: 0; top: 100vh; }
+.wos-mask-panel.left { left: 0; width: 0; }
+.wos-mask-panel.right { right: 0; left: 100vw; }
+
+/* --- 顶部全局流程引导横幅 (Guidance Banner) --- */
+#wos-guidance-banner {
+  pointer-events: none;
+  position: fixed;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2147483647;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: calc(100vw - 32px);
+  padding: 8px 18px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.92);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.38), 0 2px 8px rgba(0, 0, 0, 0.2);
+  color: #ffffff;
+  font: 500 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+  user-select: none;
+  animation: wosFadeDown 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  white-space: normal;
+}
+
+#wos-guidance-banner * { pointer-events: none !important; }
+@media (max-width: 620px) {
+  #wos-guidance-banner { padding: 8px 12px; width: calc(100vw - 48px); border-radius: 12px; box-sizing: border-box; }
+  #wos-guidance-banner .wos-guidance-badges { display: none; }
+}
+
+.wos-guidance-icon {
+  font-size: 15px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.wos-guidance-text {
+  font-weight: 550;
+  letter-spacing: 0.2px;
+  color: #f8fafc;
+}
+
+.wos-guidance-badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 4px;
+}
+
+.wos-guidance-key {
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  font: 600 11px/1 Consolas, monospace;
+  color: #e2e8f0;
+}
+
+/* 兼容旧选择器 */
+#wos-picker-banner {
+  display: none !important;
+}
+
+/* --- 手动选区悬停标识 (Picker Hover Marker) --- */
 .wos-element-highlighted {
   cursor: pointer !important;
 }
 
-.wos-smart-candidate {
-  box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.14) !important;
-  position: relative;
-  z-index: 2147483638 !important;
-}
-
-/* 只用于定位的导出范围虚拟标识；渲染前由脚本隐藏。 */
 #wos-export-target-marker {
-  position: absolute;
+  position: fixed;
   z-index: 2147483644;
   box-sizing: border-box;
   pointer-events: none;
   border: 2px solid #2563eb;
-  border-radius: 6px;
-  background: rgba(37, 99, 235, 0.055);
-  box-shadow: 0 0 0 1px rgba(191, 219, 254, 0.72), 0 12px 26px rgba(37, 99, 235, 0.18);
+  border-radius: 5px;
+  background: rgba(37, 99, 235, 0.08);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.9), 0 8px 24px rgba(37, 99, 235, 0.25);
   transition: none !important;
   will-change: top, left, width, height;
 }
 
 #wos-export-target-marker[hidden] {
-  display: none;
-}
-
-#wos-export-target-marker.wos-marker-flip-label .wos-export-target-marker__label {
-  top: 4px;
-  left: 4px;
-  border-radius: 4px;
+  display: none !important;
 }
 
 .wos-export-target-marker__label {
   position: absolute;
-  top: -33px;
+  top: -32px;
   left: -2px;
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  max-width: min(280px, calc(100vw - 24px));
-  padding: 7px 10px;
-  overflow: hidden;
-  border-radius: 8px 8px 8px 2px;
+  gap: 6px;
+  padding: 5px 11px;
+  border-radius: 6px;
   background: #1d4ed8;
   color: #ffffff;
-  box-shadow: 0 5px 14px rgba(29, 78, 216, 0.3);
-  font: 700 12px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
-  letter-spacing: 0.01em;
+  box-shadow: 0 4px 14px rgba(29, 78, 216, 0.35);
+  font: 600 11.5px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   white-space: nowrap;
+  pointer-events: none;
+  letter-spacing: 0.2px;
+}
+
+#wos-export-target-marker.wos-marker-flip-label .wos-export-target-marker__label {
+  top: 6px;
+  left: 6px;
 }
 
 .wos-export-target-marker__label i {
-  width: 7px;
-  height: 7px;
-  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: #93c5fd;
-  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.16);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.25);
+  flex-shrink: 0;
 }
 
-#wos-smart-preview {
-  position: fixed;
-  top: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 2147483646;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  max-width: calc(100vw - 32px);
-  padding: 9px 11px 9px 16px;
-  border: 1px solid rgba(147, 197, 253, 0.8);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.98);
-  color: #1e3a8a;
-  box-shadow: 0 12px 36px rgba(15, 23, 42, 0.24);
-  font: 600 13px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
-}
-
-#wos-smart-preview button {
-  border: 0;
-  border-radius: 7px;
-  padding: 7px 10px;
-  cursor: pointer;
-  font: inherit;
-}
-
-#wos-smart-preview button[data-action="export"] {
-  background: #2563eb;
-  color: #ffffff;
-}
-
-#wos-smart-preview button[data-action="pick"] {
-  background: #e0e7ff;
-  color: #1e40af;
-}
-
-#wos-smart-preview button[data-action="cancel"] {
-  padding: 5px 7px;
-  background: transparent;
-  color: #64748b;
-}
-
-/* --- 已锁定选区：可上下裁切的精确调整框 --- */
+/* --- 精确调整选框 (8-Point Region Adjuster) --- */
 #wos-region-adjuster {
   position: fixed;
   z-index: 2147483645;
-  pointer-events: none;
   box-sizing: border-box;
   border: 2px solid #2563eb;
-  border-radius: 6px;
-  background: rgba(37, 99, 235, 0.08);
-  box-shadow: 0 0 0 1px rgba(191, 219, 254, 0.85), 0 12px 26px rgba(37, 99, 235, 0.22);
+  border-radius: 4px;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.9), 0 10px 34px rgba(37, 99, 235, 0.28);
+  pointer-events: none;
+  user-select: none;
+  will-change: top, left, width, height;
 }
 
+/* 选框内部平移层 */
+.wos-region-move-surface {
+  position: absolute;
+  inset: 0;
+  pointer-events: auto;
+  cursor: move;
+  background: rgba(37, 99, 235, 0.04);
+}
+.wos-region-move-surface:hover {
+  background: rgba(37, 99, 235, 0.08);
+}
+
+/* 虚线内边框 */
 .wos-region-frame {
   position: absolute;
   inset: 0;
-  border: 1px dashed rgba(255, 255, 255, 0.9);
-  border-radius: 3px;
+  border: 1px dashed rgba(255, 255, 255, 0.95);
+  pointer-events: none;
+  border-radius: 2px;
 }
 
+/* 顶部实况尺寸 HUD 标签 */
+.wos-region-hud {
+  position: absolute;
+  top: -34px;
+  left: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 11px;
+  border-radius: 6px;
+  background: #1d4ed8;
+  color: #ffffff;
+  font: 600 11.5px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  letter-spacing: 0.3px;
+  box-shadow: 0 4px 14px rgba(29, 78, 216, 0.35);
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 4;
+}
+.wos-region-hud.flipped {
+  top: 6px;
+  left: 6px;
+}
+.wos-region-hud-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #93c5fd;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.25);
+  flex-shrink: 0;
+}
+.wos-region-hud-dim {
+  font-weight: 700;
+  color: #ffffff;
+}
+.wos-region-hud-meta {
+  color: #bfdbfe;
+  font-weight: 500;
+  font-size: 11px;
+  border-left: 1px solid rgba(255, 255, 255, 0.25);
+  padding-left: 6px;
+}
+
+/* 8 向调节手柄 */
 .wos-region-handle {
   position: absolute;
-  left: 50%;
-  width: 58px;
-  height: 14px;
-  padding: 0;
-  transform: translateX(-50%);
-  border: 2px solid #ffffff;
-  border-radius: 999px;
-  background: #2563eb;
-  box-shadow: 0 2px 8px rgba(30, 64, 175, 0.34);
-  cursor: ns-resize;
   pointer-events: auto;
   touch-action: none;
+  box-sizing: border-box;
+  background: #2563eb;
+  border: 2px solid #ffffff;
+  box-shadow: 0 2px 8px rgba(30, 64, 175, 0.45);
+  padding: 0;
+  z-index: 5;
+  transition: transform 0.1s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+.wos-region-handle:hover, .wos-region-handle:focus-visible {
+  background: #1d4ed8;
+  box-shadow: 0 4px 14px rgba(30, 64, 175, 0.6);
+  outline: none;
+}
+.wos-region-handle::before {
+  content: '';
+  position: absolute;
+  inset: -10px;
 }
 
-.wos-region-handle.top { top: -8px; }
-.wos-region-handle.bottom { bottom: -8px; }
-.wos-region-handle i {
+/* 4 边缘手柄 (Pill Handles) */
+.wos-region-handle.top,
+.wos-region-handle.bottom {
+  left: 50%;
+  width: 52px;
+  height: 12px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  cursor: ns-resize;
+}
+.wos-region-handle.top:hover { transform: translateX(-50%) scale(1.1); }
+.wos-region-handle.bottom:hover { transform: translateX(-50%) scale(1.1); }
+
+.wos-region-handle.top { top: -6px; }
+.wos-region-handle.bottom { bottom: -6px; }
+
+.wos-region-handle.left,
+.wos-region-handle.right {
+  top: 50%;
+  height: 52px;
+  width: 12px;
+  transform: translateY(-50%);
+  border-radius: 999px;
+  cursor: ew-resize;
+}
+.wos-region-handle.left:hover { transform: translateY(-50%) scale(1.1); }
+.wos-region-handle.right:hover { transform: translateY(-50%) scale(1.1); }
+
+.wos-region-handle.left { left: -6px; }
+.wos-region-handle.right { right: -6px; }
+
+/* 4 角落手柄 (Corner Handles) */
+.wos-region-handle.top-left,
+.wos-region-handle.top-right,
+.wos-region-handle.bottom-left,
+.wos-region-handle.bottom-right {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+}
+.wos-region-handle.top-left { top: -7px; left: -7px; cursor: nwse-resize; }
+.wos-region-handle.top-right { top: -7px; right: -7px; cursor: nesw-resize; }
+.wos-region-handle.bottom-left { bottom: -7px; left: -7px; cursor: nesw-resize; }
+.wos-region-handle.bottom-right { bottom: -7px; right: -7px; cursor: nwse-resize; }
+
+.wos-region-handle.top-left:hover,
+.wos-region-handle.top-right:hover,
+.wos-region-handle.bottom-left:hover,
+.wos-region-handle.bottom-right:hover {
+  transform: scale(1.2);
+}
+
+/* 手柄防滑槽 */
+.wos-region-handle.top i, .wos-region-handle.bottom i {
   display: block;
-  width: 18px;
+  width: 16px;
   height: 2px;
-  margin: 0 auto;
-  border-top: 2px solid rgba(255, 255, 255, 0.9);
-  border-bottom: 2px solid rgba(255, 255, 255, 0.9);
+  margin: 1.5px auto 0;
+  border-top: 1.5px solid rgba(255, 255, 255, 0.9);
+  border-bottom: 1.5px solid rgba(255, 255, 255, 0.9);
+}
+.wos-region-handle.left i, .wos-region-handle.right i {
+  display: block;
+  height: 16px;
+  width: 2px;
+  margin: 1.5px auto 0;
+  border-left: 1.5px solid rgba(255, 255, 255, 0.9);
+  border-right: 1.5px solid rgba(255, 255, 255, 0.9);
 }
 
+/* --- 智能吸附操作面板 (Smart Attached Toolbar) --- */
 #wos-region-adjuster-panel {
   position: fixed;
   z-index: 2147483646;
   display: flex;
+  flex-wrap: wrap;
+  max-height: calc(100vh - 24px);
+  overflow: auto;
   align-items: center;
-  gap: 7px;
-  padding: 7px 8px 7px 11px;
-  border: 1px solid rgba(147, 197, 253, 0.86);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.98);
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.22);
-  color: #1e3a8a;
-  font: 600 12px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.97);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(203, 213, 225, 0.95);
+  box-shadow: 0 16px 42px rgba(15, 23, 42, 0.22), 0 2px 8px rgba(0, 0, 0, 0.08);
+  color: #1e293b;
+  font: 500 12.5px/1.3 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+  box-sizing: border-box;
+  max-width: calc(100vw - 24px);
+  user-select: none;
+  animation: wosFadeIn 0.2s ease;
   white-space: nowrap;
 }
 
-.wos-region-tip { color: #475569; }
 #wos-region-adjuster-panel button {
-  border: 0;
-  border-radius: 6px;
-  padding: 7px 9px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 12px;
+  border-radius: 7px;
+  border: none;
   cursor: pointer;
   font: inherit;
+  font-weight: 600;
+  transition: all 0.15s ease;
 }
-#wos-region-adjuster-panel button[data-action="export"] { background: #2563eb; color: #ffffff; }
-#wos-region-adjuster-panel button[data-action="export"]:hover { background: #1d4ed8; }
-#wos-region-adjuster-panel button[data-action="repick"] { background: #e0e7ff; color: #1e40af; }
-#wos-region-adjuster-panel button[data-action="cancel"] { padding-inline: 7px; background: transparent; color: #64748b; }
-body.wos-region-resizing, body.wos-region-resizing * { cursor: ns-resize !important; user-select: none !important; }
+
+#wos-region-adjuster-panel button[data-action="export"] {
+  background: linear-gradient(135deg, #16a34a, #15803d);
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(22, 163, 74, 0.35);
+  font-size: 13px;
+  padding: 8px 16px;
+}
+#wos-region-adjuster-panel button[data-action="export"]:hover {
+  background: linear-gradient(135deg, #15803d, #166534);
+  box-shadow: 0 4px 12px rgba(22, 163, 74, 0.45);
+  transform: translateY(-1px);
+}
+
+#wos-region-adjuster-panel button[data-action="repick"] {
+  background: #f1f5f9;
+  color: #334155;
+}
+#wos-region-adjuster-panel button[data-action="repick"]:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+#wos-region-adjuster-panel button[data-action="reset-size"] {
+  background: transparent;
+  color: #2563eb;
+  padding: 6px 8px;
+  font-size: 12px;
+}
+#wos-region-adjuster-panel button[data-action="reset-size"]:hover {
+  background: #eff6ff;
+}
+
+#wos-region-adjuster-panel button[data-action="cancel"] {
+  background: transparent;
+  color: #94a3b8;
+  padding: 6px 8px;
+  font-size: 16px;
+  line-height: 1;
+}
+#wos-region-adjuster-panel button[data-action="cancel"]:hover {
+  background: #fee2e2;
+  color: #ef4444;
+}
+
+.wos-region-divider {
+  width: 1px;
+  height: 18px;
+  background: #e2e8f0;
+}
+
+/* 微调输入组 */
+.wos-region-size-inputs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #64748b;
+}
+.wos-region-size-inputs input {
+  width: 58px;
+  padding: 4px 5px;
+  border: 1px solid #cbd5e1;
+  border-radius: 5px;
+  background: #ffffff;
+  color: #0f172a;
+  font: 600 11.5px Consolas, monospace;
+  text-align: center;
+}
+.wos-region-size-inputs input:focus {
+  outline: 2px solid #2563eb;
+  border-color: #2563eb;
+}
+
+/* 模式选择（针对局部滚动区域） */
+.wos-region-scroll-mode {
+  max-width: 100%;
+  padding: 4px 6px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #0f172a;
+  background: #ffffff;
+}
+
+/* 拖拽中的鼠标光标全局锁定 */
+body.wos-region-resizing { user-select: none !important; }
+body.wos-resizing-top, body.wos-resizing-bottom { cursor: ns-resize !important; }
+body.wos-resizing-left, body.wos-resizing-right { cursor: ew-resize !important; }
+body.wos-resizing-top-left, body.wos-resizing-bottom-right { cursor: nwse-resize !important; }
+body.wos-resizing-top-right, body.wos-resizing-bottom-left { cursor: nesw-resize !important; }
+body.wos-moving-region { cursor: move !important; }
+
 /* --- 悬浮通知 (Toast) --- */
 #wos-toast-message {
   position: fixed;
   top: 24px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 2147483646;
+  z-index: 2147483648;
   padding: 9px 18px;
   border-radius: 8px;
   font-size: 13.5px;
@@ -402,7 +635,7 @@ body.wos-region-resizing, body.wos-region-resizing * { cursor: ns-resize !import
   }
 }
 
-#wos-region-adjuster-panel { box-sizing: border-box; max-width: calc(100vw - 24px); flex-wrap: wrap; line-height: 1.4; white-space: normal; }
-#wos-region-adjuster-panel .wos-region-tip { flex-basis: 100%; }
-.wos-region-handle:focus-visible { outline: 3px solid #f59e0b; outline-offset: 3px; }
-#wos-picker-banner { max-width: calc(100vw - 24px); box-sizing: border-box; flex-wrap: wrap; }
+@keyframes wosFadeIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}

@@ -1,0 +1,17 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Independent sidebar capture regression</title>
+<style>
+body{margin:0;background:purple;font:16px sans-serif}
+aside{position:fixed;right:0;top:0;height:100vh;width:400px;display:flex;flex-direction:column;background:white}
+header{height:60px;flex-shrink:0}
+main{overflow:auto;flex:1}
+section{height:500px}
+footer{height:100px;background:rgb(0,200,0)}
+</style>
+<aside><header>Journal sidebar</header><main><section>First section</section><section>Second section</section><footer>END — must appear in export</footer></main></aside>
+<!-- Load extension, select sidebar header, choose full scroll region, export PNG at 2x.
+Expected: 800x2320, green bottom, no purple background, unchanged live scroll position.
+Also test selection inside main and compare exports at scrollTop=0 and scrollTop=200.
+For a directly scrolling drawer remove display:flex and set overflow:auto on aside.
+-->

@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>视觉引导测试页面</title>
+  <link rel="stylesheet" href="../content.css">
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      margin: 0;
+      padding: 40px;
+      background: #f8fafc;
+      color: #0f172a;
+      line-height: 1.6;
+    }
+    header {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 24px;
+    }
+    .test-controls {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      z-index: 999999;
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      padding: 10px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      display: flex;
+      gap: 8px;
+    }
+    .test-controls button {
+      padding: 6px 12px;
+      background: #2563eb;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    article.main-record {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 32px;
+      margin-bottom: 24px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    }
+    aside {
+      background: #f1f5f9;
+      padding: 20px;
+      border-radius: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="test-controls">
+    <button id="btn-trigger-smart">触发智能识别</button>
+    <button id="btn-trigger-picker">触发手动选区</button>
+  </div>
+
+  <header>
+    <h1>Web of Science / 学术文章模拟页面</h1>
+    <p>这是一个用于验证 Web2PDF 选区视觉引导与交互修复的测试页面。</p>
+  </header>
+
+  <article class="main-record">
+    <h1>基于深度学习的高保真网页转 PDF 选区优化机制研究</h1>
+    <div class="authors">作者: 张三, 李四, 王五</div>
+    <div class="doi">DOI: 10.1000/182</div>
+    <hr>
+    <h3>摘要 (Abstract)</h3>
+    <p>本文针对传统网页截图与 PDF 导出中存在的选区无遮罩、交互引导缺乏、操作视线割裂等问题，提出了电影级聚光灯暗色遮罩系统与 8 点全向手柄框架。实验结果表明，该方案显著提升了用户的操作聚焦度与边界可读性。</p>
+    <p>正文内容第一段：探讨在复杂的 Web of Science 学术页面中，如何排除侧栏引文网络与顶部固定导航，精准命中核心文献白底卡片。</p>
+    <p>正文内容第二段：详细分析 8 向控制手柄（上、下、左、右及 4 角落）以及选框平移层在用户交互过程中的物理坐标映射与边缘自动滚动策略。</p>
+  </article>
+
+  <aside>
+    <h3>引文网络 (Citation Network)</h3>
+    <p>被引频次: 42 次</p>
+  </aside>
+
+  <script>
+    window.chrome = window.chrome || {};
+    window.chrome.runtime = window.chrome.runtime || {
+      onMessage: {
+        listeners: [],
+        addListener(fn) { this.listeners.push(fn); }
+      }
+    };
+    window.chrome.storage = window.chrome.storage || {
+      local: {
+        get(keys, cb) { if (cb) cb({}); return Promise.resolve({}); },
+        set(obj, cb) { if (cb) cb(); return Promise.resolve(); }
+      }
+    };
+  </script>
+  <script src="../libs/html2canvas.min.js"></script>
+  <script src="../libs/jspdf.umd.min.js"></script>
+  <script src="../content.js"></script>
+  <script>
+    document.getElementById('btn-trigger-smart').addEventListener('click', () => {
+      window.chrome.runtime.onMessage.listeners.forEach(l => l({ action: 'preview_smart', options: { outputFormat: 'pdf', resolutionScale: 3, exportMode: 'a4' } }, {}, () => {}));
+    });
+    document.getElementById('btn-trigger-picker').addEventListener('click', () => {
+      window.chrome.runtime.onMessage.listeners.forEach(l => l({ action: 'start_picker', options: { outputFormat: 'pdf', resolutionScale: 3, exportMode: 'a4' } }, {}, () => {}));
+    });
+  </script>
+</body>
+</html>
