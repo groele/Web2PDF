@@ -535,7 +535,42 @@
       // Descendants may explicitly set visibility:visible.
       for (const child of element.querySelectorAll('*')) child.style.setProperty('visibility', 'hidden', 'important');
     }
-    normalizeCaptureColors(clonedDocument, captureRoot);
+    // html2canvas 1.4 needs a compatibility pass for modern CSS colours, but
+    // asking for three computed styles on every cloned node is expensive on
+    // long papers. Inspect authored rules first and retain the conservative
+    // full pass whenever a stylesheet cannot be inspected.
+    if (captureCloneMayUseModernColors(clonedDocument, captureRoot)) {
+      normalizeCaptureColors(clonedDocument, captureRoot);
+    }
+  }
+
+  function captureCloneMayUseModernColors(clonedDocument, captureRoot = null) {
+    const modern = /\b(?:oklch|oklab|lch|lab|color-mix|color|light-dark)\(/i;
+    const hasSyntax = value => typeof value === 'string' && modern.test(value);
+    const scanRules = rules => {
+      for (const rule of Array.from(rules || [])) {
+        if (hasSyntax(rule.cssText)) return true;
+        // Grouping rules such as @media can be represented without their
+        // nested declarations in cssText on some Chromium versions.
+        if (rule.cssRules && scanRules(rule.cssRules)) return true;
+      }
+      return false;
+    };
+
+    for (const sheet of Array.from(clonedDocument.styleSheets || [])) {
+      try {
+        if (scanRules(sheet.cssRules)) return true;
+      } catch (_) {
+        // Cross-origin stylesheets cannot be read. Keep correctness over the
+        // optimization because they may still supply modern computed colours.
+        return true;
+      }
+    }
+
+    const scope = captureRoot
+      ? [captureRoot, ...captureRoot.querySelectorAll('[style]')]
+      : Array.from(clonedDocument.querySelectorAll('[style]'));
+    return scope.some(element => hasSyntax(element.getAttribute('style') || ''));
   }
 
   // html2canvas 1.4 cannot parse modern CSS colors. Normalize only its cloned DOM.
