@@ -174,6 +174,11 @@ try {
   await pageClient.open;
   await pageClient.send('Page.enable');
   await pageClient.send('Runtime.enable');
+  // Chrome can start the target page before an unpacked extension has finished
+  // registering its content scripts. Navigate again only after CDP is ready so
+  // this checks the actual document_idle injection lifecycle.
+  await pageClient.send('Page.navigate', { url: fixtureUrl });
+  await waitFor(async () => evaluate(pageClient, "document.readyState === 'complete'"), 'Fixture did not finish its extension-aware navigation');
 
   await waitFor(async () => evaluate(pageClient, "Boolean(document.querySelector('#wos-pdf-floating-widget'))"), 'Installed extension did not inject its toolbar');
   const initial = await evaluate(pageClient, `({
