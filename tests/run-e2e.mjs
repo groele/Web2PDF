@@ -1,4 +1,6 @@
 import http from 'node:http';
+import net from 'node:net';
+import os from 'node:os';
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
@@ -6,6 +8,38 @@ import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 
 const baseDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+
+function listen(server, port = 0) {
+  return new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(port, '127.0.0.1', () => {
+      server.off('error', reject);
+      resolve(server.address().port);
+    });
+  });
+}
+
+async function freePort() {
+  const probe = net.createServer();
+  const port = await listen(probe);
+  await new Promise(resolve => probe.close(resolve));
+  return port;
+}
+
+async function waitFor(check, label, timeoutMs = 15000) {
+  const deadline = Date.now() + timeoutMs;
+  let lastError;
+  while (Date.now() < deadline) {
+    try {
+      const value = await check();
+      if (value) return value;
+    } catch (error) {
+      lastError = error;
+    }
+    await new Promise(resolve => setTimeout(resolve, 150));
+  }
+  throw new Error(label + (lastError ? ': ' + lastError.message : ''));
+}
 
 // 1. Start local HTTP server
 const mimeMap = {
@@ -29,8 +63,8 @@ const server = http.createServer((req, res) => {
   }
 });
 
-await new Promise(r => server.listen(8767, '127.0.0.1', r));
-console.log('Local HTTP server running at http://127.0.0.1:8767');
+const fixturePort = await listen(server);
+console.log('Local HTTP server running at http://127.0.0.1:' + fixturePort);
 
 // 2. Launch Edge directly with target URL
 const browserCandidates = [
@@ -41,23 +75,26 @@ const browserCandidates = [
 ].filter(Boolean);
 const edgePath = browserCandidates.find(candidate => fs.existsSync(candidate));
 if (!edgePath) throw new Error('No supported browser found. Set WEB2PDF_BROWSER_PATH to Edge or Chrome.');
-const userDataDir = path.join(baseDir, 'test-output', 'edge-e2e-data-3');
-fs.mkdirSync(userDataDir, { recursive: true });
+const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'web2pdf-mock-e2e-'));
+const debuggerPort = await freePort();
 
 const proc = spawn(edgePath, [
   '--headless=new',
-  '--remote-debugging-port=9234',
+  '--remote-debugging-address=127.0.0.1',
+  '--remote-debugging-port=' + debuggerPort,
   '--disable-gpu',
   '--window-size=1280,900',
   '--user-data-dir=' + userDataDir,
-  'http://127.0.0.1:8767/tests/test-guidance.html'
+  'http://127.0.0.1:' + fixturePort + '/tests/test-guidance.html'
 ]);
 
-await new Promise(r => setTimeout(r, 2500));
-
 try {
-  const versionRes = await fetch('http://127.0.0.1:9234/json/list');
-  const pages = await versionRes.json();
+  const pages = await waitFor(async () => {
+    const response = await fetch('http://127.0.0.1:' + debuggerPort + '/json/list');
+    if (!response.ok) return null;
+    const entries = await response.json();
+    return entries.some(entry => entry.type === 'page' && entry.url.includes('test-guidance')) ? entries : null;
+  }, 'Browser DevTools endpoint did not become available');
   const page = pages.find(p => p.type === 'page' && p.url.includes('test-guidance')) || pages[0];
   console.log('Target page URL:', page.url);
   const ws = new WebSocket(page.webSocketDebuggerUrl);
@@ -180,6 +217,10 @@ try {
   console.error('ERROR:', e);
   process.exitCode = 1;
 } finally {
-  proc.kill();
-  server.close();
+  if (!proc.killed) {
+    proc.kill();
+    await new Promise(resolve => proc.once('exit', resolve));
+  }
+  await new Promise(resolve => server.close(resolve));
+  fs.rmSync(userDataDir, { recursive: true, force: true });
 }
