@@ -48,9 +48,9 @@ async function waitFor(check, label, timeoutMs = 15000) {
 function findBrowser() {
   const candidates = [
     process.env.WEB2PDF_BROWSER_PATH,
-    path.join(process.env.PROGRAMFILES || '', 'Google', 'Chrome', 'Application', 'chrome.exe'),
     path.join(process.env['PROGRAMFILES(X86)'] || '', 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
-    path.join(process.env.PROGRAMFILES || '', 'Microsoft', 'Edge', 'Application', 'msedge.exe')
+    path.join(process.env.PROGRAMFILES || '', 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+    path.join(process.env.PROGRAMFILES || '', 'Google', 'Chrome', 'Application', 'chrome.exe')
   ].filter(Boolean);
   return candidates.find(candidate => fs.existsSync(candidate));
 }
@@ -153,7 +153,8 @@ try {
     '--no-default-browser-check',
     '--disable-extensions-except=' + baseDir,
     '--load-extension=' + baseDir,
-    '--host-resolver-rules=MAP test.webofscience.com 127.0.0.1',
+    '--disable-features=HttpsFirstMode,HttpsUpgrades',
+    '--host-resolver-rules=MAP test.webofscience.com 127.0.0.1,EXCLUDE localhost',
     '--user-data-dir=' + profileDir,
     '--window-size=1280,900',
     fixtureUrl
@@ -182,7 +183,7 @@ try {
   await pageClient.send('Page.navigate', { url: fixtureUrl });
   await waitFor(async () => evaluate(pageClient, "document.readyState === 'complete'"), 'Fixture did not finish its extension-aware navigation');
 
-  const injectionContext = await evaluate(pageClient, "({ href: location.href, title: document.title, hasArticle: Boolean(document.querySelector('article.main-record')) })");
+  const injectionContext = await evaluate(pageClient, "({ href: location.href, title: document.title, bodyText: document.body?.innerText.slice(0, 320) || '', hasArticle: Boolean(document.querySelector('article.main-record')) })");
   console.log('Injection context:', JSON.stringify(injectionContext));
   await waitFor(async () => evaluate(pageClient, "Boolean(document.querySelector('#wos-pdf-floating-widget'))"), 'Installed extension did not inject its toolbar');
   const initial = await evaluate(pageClient, `({
