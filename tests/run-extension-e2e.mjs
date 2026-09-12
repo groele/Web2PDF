@@ -154,6 +154,7 @@ try {
     '--disable-extensions-except=' + baseDir,
     '--load-extension=' + baseDir,
     '--disable-features=HttpsFirstMode,HttpsUpgrades',
+    '--no-proxy-server',
     '--host-resolver-rules=MAP test.webofscience.com 127.0.0.1,EXCLUDE localhost',
     '--user-data-dir=' + profileDir,
     '--window-size=1280,900',
