@@ -163,7 +163,7 @@ async (page) => {
   state = await page.evaluate(() => window.capture);
   check('intentional non-scrolling clipping remains intact', state.width === 800 && state.height === 2320, state);
   state = await page.evaluate(() => new Promise(resolve => window.message({ action: 'check_status' }, null, resolve)));
-  check('content version handshake is current', state.version === '3.5.0', state);
+  check('content version handshake is current', state.version === '3.6.0', state);
   for (const format of ['png', 'jpeg']) {
     await setup('<style>body{margin:0}article{margin:100px;width:100px;height:100px;background:rgb(0,200,0)}</style><article></article>');
     await pick('article', { ...options, outputFormat: format, margins: { top: 1, bottom: 3, left: 2, right: 4 } });
@@ -171,5 +171,47 @@ async (page) => {
     state = await page.evaluate(() => window.encoded);
     check(format + ' encoded file dimensions and independent margins', state.width === 245 && state.height === 231 && state.corner.slice(0, 3).every(n => n > 250) && state.center[1] >= 195 && state.center[0] < 5, state);
   }
+
+  // Cooperative cancellation must never release scroll or start a download early.
+  await setup(sidebar);
+  await page.locator('main').evaluate(el => el.scrollTop = 200);
+  await pick('header');
+  await page.evaluate(() => { window.delayCapture = true; });
+  await page.locator('[data-action="export"]').click();
+  await page.waitForFunction(() => typeof window.releaseCapture === 'function');
+  check('export shows live stage and elapsed timer', await page.locator('#wos-export-progress').count() === 1 && (await page.locator('#wos-export-progress').innerText()).includes('2 / 4'));
+  await page.locator('#wos-export-progress button').click();
+  check('cancel waits for active renderer', await page.locator('#wos-region-adjuster-panel').getAttribute('aria-busy') === 'true');
+  await page.evaluate(() => window.releaseCapture());
+  await page.waitForFunction(() => !document.querySelector('#wos-export-progress'));
+  state = await page.evaluate(() => ({
+    downloads:window.downloads.length,
+    busy:document.querySelector('#wos-region-adjuster-panel')?.hasAttribute('aria-busy'),
+    frames:document.querySelectorAll('.html2canvas-container').length,
+    attrs:[...document.querySelectorAll('*')].flatMap(el => el.getAttributeNames()).filter(name => /^data-wos-(capture|scroll)-/.test(name)).length
+  }));
+  check('cancel keeps selection without download or leaked clone', state.downloads === 0 && state.busy === false && state.frames === 0 && state.attrs === 0, state);
+  await page.evaluate(() => { window.delayCapture = false; });
+  await exportNow();
+  check('cancelled selection can be exported again', await page.evaluate(() => window.downloads.length) === 1);
+
+  await setup('<style>body{margin:0}article{margin:100px;width:100px;height:100px;background:rgb(0,200,0)}</style><article>Fast</article>');
+  await pick('article', {...options,resolutionScale:1.5});
+  await exportNow();
+  state = await page.evaluate(() => window.encoded);
+  check('fast scale produces real lossless PNG at 1.5x', state.width === 150 && state.height === 150 && state.type === 'image/png', state);
+
+  await setup(sidebar);
+  await pick('header', {...options,outputFormat:'pdf'});
+  await page.evaluate(() => {
+    window.realToBlob = HTMLCanvasElement.prototype.toBlob;
+    HTMLCanvasElement.prototype.toBlob = function(callback) { callback(null); };
+  });
+  await exportNow();
+  check('encoding failure keeps retryable selection and cleans progress', await page.locator('#wos-region-adjuster-panel').count() === 1 && await page.locator('#wos-export-progress').count() === 0);
+  await page.evaluate(() => { HTMLCanvasElement.prototype.toBlob = window.realToBlob; });
+  await exportNow();
+  check('real PDF encoding succeeds after retry', await page.evaluate(() => window.pdf?.pages > 0 && window.pdf?.header.startsWith('%PDF')));
+
   return { passed: results.filter(r => r.pass).length, total: results.length, results };
 }

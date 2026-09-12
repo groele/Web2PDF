@@ -1,17 +1,17 @@
 /**
- * 网页区域 PDF 导出器 - Content Script (v3.5.0)
+ * 网页区域 PDF 导出器 - Content Script (v3.6.0)
  */
 
 (function () {
-  const CONTENT_VERSION = '3.5.0';
+  const CONTENT_VERSION = '3.6.0';
   if (window.__WOS_PDF_EXPORTER_INITIALIZED__) return;
   window.__WOS_PDF_EXPORTER_INITIALIZED__ = true;
   window.__WOS_PDF_EXPORTER_VERSION__ = CONTENT_VERSION;
 
   // 默认排版模式：'a4' (标准 A4 分页) 或 'continuous' (单页长图)
   let currentExportMode = 'a4';
-  // 默认清晰度：3.0（推荐渲染倍率；实际 DPI 取决于网页尺寸）
-  let currentResolutionScale = 3.0;
+  // 默认平衡预设：2×；保留用户已保存的倍率。
+  let currentResolutionScale = 2.0;
   // 默认开启 PNG 无损位图输出
   let currentLosslessPng = true;
 
@@ -52,11 +52,16 @@
   // --- 全网通用的智能主要内容定位引擎 ---
   function findSmartContentContainer() {
     // 1. 优先定位学术网站 (Web of Science / PubMed / CNKI 等) 的核心文章白底卡片
+    const textCache = new Map();
+    const readText = element => {
+      if (!textCache.has(element)) textCache.set(element, element.innerText || '');
+      return textCache.get(element);
+    };
     const headings = Array.from(document.querySelectorAll('h1, h2'));
     for (const heading of headings) {
       let curr = heading;
       while (curr && curr !== document.body && curr !== document.documentElement) {
-        const text = curr.innerText || '';
+        const text = readText(curr);
         const hasCore = text.includes('摘要') || text.includes('Abstract') || text.includes('作者') || text.includes('Authors') || text.includes('DOI');
         const hasRight = text.includes('引文网络') || text.includes('Citation Network') || text.includes('被引频次');
         const hasLeft = text.includes('我的 Web of Science') || text.includes('个人信息通知');
@@ -95,9 +100,9 @@
     let maxLen = 0;
 
     for (const el of allArticles) {
-      const len = (el.innerText || '').trim().length;
+      const len = readText(el).trim().length;
       if (len > maxLen && len < 50000) {
-        const text = el.innerText;
+        const text = readText(el);
         if (!text.includes('我的 Web of Science') && !text.includes('引文网络')) {
           maxLen = len;
           bestEl = el;
@@ -180,13 +185,14 @@
 
     const breaks = [];
     let top = 0;
+    let candidateIndex = 0;
     while (top + defaultPageHeightPx < canvasHeight) {
       const ideal = top + defaultPageHeightPx;
       const minimum = top + Math.floor(defaultPageHeightPx * 0.62);
       let next = 0;
-      for (const bottom of candidates) {
-        if (bottom >= minimum && bottom <= ideal) next = bottom;
-        if (bottom > ideal) break;
+      while (candidateIndex < candidates.length && candidates[candidateIndex] <= ideal) {
+        const bottom = candidates[candidateIndex++];
+        if (bottom >= minimum) next = bottom;
       }
       // Avoid a very short page if no useful block boundary was found.
       if (!next || next <= top + 64) next = ideal;
@@ -490,20 +496,30 @@
     // Sticky toolbars can move from normal flow to the top after scrolling.
     // Detect compact action groups, not a particular edge or scroll position.
     // Visibility preserves the original layout and crop coordinates.
+    const isWos = /(^|\.)(webofscience\.com|clarivate\.(com|cn))$/i.test(location.hostname);
+    const hiddenRoots = [];
     for (const element of (captureRoot ? [captureRoot, ...captureRoot.querySelectorAll('*')] : clonedDocument.querySelectorAll('*'))) {
+      if (element === captureRoot) continue;
       const style = view.getComputedStyle(element);
+      if (!isWos && style.position !== 'fixed' && style.position !== 'sticky') continue;
       const box = element.getBoundingClientRect();
       if (box.height <= 0 || box.height > Math.min(180, view.innerHeight * 0.3)) continue;
-      const controls = element.querySelectorAll('button, [role="button"], a[href], input[type="button"], input[type="submit"]');
       const text = (element.textContent || '').replace(/\s+/g, ' ').trim();
       if (text.length >= 1200) continue;
       const toolbarLike = element.matches('nav,header,[role="toolbar"]')
         || /toolbar|action[-_ ]?bar/i.test(`${element.id} ${element.className}`);
-      const isFloatingActions = !captureRoot && box.width >= 240 && controls.length >= 2
+      const floatingCandidate = !captureRoot && box.width >= 240
         && (style.position === 'fixed' || (style.position === 'sticky' && toolbarLike));
+      let controlCount = 0;
+      if (floatingCandidate) {
+        const walker = clonedDocument.createTreeWalker(element, 1);
+        while (walker.nextNode()) {
+          if (walker.currentNode.matches('button,[role="button"],a[href],input[type="button"],input[type="submit"]') && ++controlCount === 2) break;
+        }
+      }
+      const isFloatingActions = floatingCandidate && controlCount >= 2;
       // WOS may position an outer wrapper while the action group itself is static.
       // Require multiple distinctive labels so article metadata is not mistaken for UI.
-      const isWos = /(^|\.)(webofscience\.com|clarivate\.(com|cn))$/i.test(location.hostname);
       const wosFullText = /出版商处的全文|全文链接|Full text links|Full text at publisher/i.test(text);
       const wosActions = /添加到标记|标记结果列表|Add to marked|Marked List/i.test(text);
       const isWosActionGroup = isWos && wosFullText && wosActions && /导出|Export/i.test(text);
@@ -511,6 +527,9 @@
       const isHelpWidget = style.position === 'fixed' && box.width <= 240 && box.height <= 180
         && /help|support|chat|帮助|客服/i.test(label);
       if (element === captureRoot || (!isFloatingActions && !isWosActionGroup && !isHelpWidget)) continue;
+      hiddenRoots.push(element);
+    }
+    for (const element of hiddenRoots) {
       element.setAttribute('data-html2canvas-ignore', 'true');
       element.style.setProperty('visibility', 'hidden', 'important');
       // Descendants may explicitly set visibility:visible.
@@ -594,12 +613,14 @@
   }
 
   // --- 高保真直出 PDF 引擎 ---
-  async function downloadCanvasAsImage(canvas, fileName, outputFormat) {
+  async function downloadCanvasAsImage(canvas, fileName, outputFormat, job) {
     const isPng = outputFormat === 'png';
     const mimeType = isPng ? 'image/png' : 'image/jpeg';
     const extension = isPng ? 'png' : 'jpg';
     const blob = await new Promise(resolve => canvas.toBlob(resolve, mimeType, isPng ? undefined : 0.96));
     if (!blob) throw new Error('无法编码图片');
+    job?.check();
+    job?.stage('4 / 4 · 开始下载', 100);
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -619,9 +640,9 @@
       if (element.scrollHeight > element.clientHeight || element.scrollWidth > element.clientWidth) {
         const id = String(positions.size);
         positions.set(element, { left: element.scrollLeft, top: element.scrollTop, id });
-        element.setAttribute(attribute, id);
       }
     }
+    for (const [element, position] of positions) element.setAttribute(attribute, position.id);
     const prevent = event => { if (event.cancelable) event.preventDefault(); };
     const keydown = event => {
       if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','PageUp','PageDown','Home','End',' '].includes(event.key)) prevent(event);
@@ -671,6 +692,49 @@
     };
   }
 
+  // Yield between expensive stages. html2canvas itself cannot be interrupted safely.
+  const yieldToBrowser = () => new Promise(resolve => setTimeout(resolve, 0));
+  async function encodeCanvas(canvas, mimeType, quality) {
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, mimeType, quality));
+    if (!blob) throw new Error('无法编码图片，请缩小选区或降低倍率');
+    return new Uint8Array(await blob.arrayBuffer());
+  }
+
+  function createExportJob() {
+    const controller = new AbortController();
+    const started = performance.now();
+    const panel = document.createElement('section');
+    panel.id = 'wos-export-progress';
+    panel.setAttribute('data-html2canvas-ignore', 'true');
+    panel.setAttribute('aria-label', '导出进度');
+    panel.innerHTML = '<div class="wos-progress-heading"><strong>正在导出</strong><span class="wos-progress-time" aria-hidden="true">0.0 s</span></div><div class="wos-progress-track" aria-hidden="true"><i></i></div><p role="status" aria-live="polite"></p><button type="button">取消导出</button>';
+    document.documentElement.appendChild(panel);
+    const status = panel.querySelector('p');
+    const button = panel.querySelector('button');
+    const cancel = () => {
+      controller.abort();
+      button.disabled = true;
+      status.textContent = '取消已请求，等待当前处理阶段结束…';
+    };
+    const onKey = event => {
+      if (event.key === 'Escape') { event.preventDefault(); event.stopImmediatePropagation(); cancel(); }
+    };
+    button.addEventListener('click', cancel);
+    document.addEventListener('keydown', onKey, true);
+    const timer = setInterval(() => { panel.querySelector('.wos-progress-time').textContent = ((performance.now() - started) / 1000).toFixed(1) + ' s'; }, 200);
+    return {
+      get cancelled() { return controller.signal.aborted; },
+      check() { if (controller.signal.aborted) throw new DOMException('已取消导出', 'AbortError'); },
+      stage(text, progress) {
+        this.check();
+        status.textContent = text;
+        panel.querySelector('.wos-progress-track i').style.width = progress + '%';
+      },
+      elapsed() { return ((performance.now() - started) / 1000).toFixed(1); },
+      close() { clearInterval(timer); document.removeEventListener('keydown', onKey, true); panel.remove(); }
+    };
+  }
+
   async function exportElementToPdf(targetElement, options = {}) {
     if (isExporting) return;
     if (!targetElement) {
@@ -690,8 +754,8 @@
       return;
     }
 
-    const requested = Number(options.resolutionScale || currentResolutionScale || 3.0);
-    const requestedScale = Number.isFinite(requested) && requested > 0 ? Math.min(4, requested) : 3;
+    const requested = Number(options.resolutionScale || currentResolutionScale || 2.0);
+    const requestedScale = Number.isFinite(requested) && requested > 0 ? Math.min(4, requested) : 2;
     const capture = options.captureRect;
     let scrollPlan = null;
     let clonedBoundaries = null;
@@ -733,8 +797,13 @@
     let scrollLock;
     let canvas;
     let cloneFrame;
+    let sliceCanvas;
+    const job = createExportJob();
     isExporting = true;
     try {
+      job.stage('1 / 4 · 准备页面与图片', 10);
+      await yieldToBrowser();
+      job.check();
       scrollLock = freezeCaptureScroll();
       const saved = options.margins === undefined && typeof chrome !== 'undefined' && chrome.storage?.local
         ? (await chrome.storage.local.get(['wos_margins'])).wos_margins : options.margins;
@@ -744,15 +813,19 @@
         return [edge, value === null || value === undefined || value === '' || !Number.isFinite(n) ? fallback : Math.max(0, Math.min(50, n))];
       }));
       restoreExtensionUi = hideExtensionUi();
-      showToast(`⏳ 正在生成 ${formatUpper}，页面滚动已暂时锁定…`, 'info', 0);
+      document.getElementById('wos-toast-message')?.remove();
 
       await waitForRenderableAssets(targetElement);
+      job.check();
       if (!targetElement.isConnected) throw new Error('选中的内容已被页面移除，请重新选择');
       if (options.fullScroll) {
         scrollPlan = createScrollCapturePlan(targetElement);
         scrollPlan.mark();
       }
 
+      job.stage('2 / 4 · 渲染选区，复杂页面可能需要更久', 30);
+      await yieldToBrowser();
+      job.check();
       const renderOptions = {
         scale: scale,
         useCORS: true,
@@ -761,6 +834,7 @@
         backgroundColor: '#ffffff',
         onclone: (doc, root) => {
           cloneFrame = doc.defaultView.frameElement;
+          job.check();
           scrollLock.restoreClone(doc);
           if (scrollPlan) {
             expandScrollCapture(doc, root, scrollPlan);
@@ -781,6 +855,10 @@
         ...(capture ? { x: capture.x, y: capture.y, width: capture.width, height: capture.height } : {})
       };
       canvas = await html2canvas(capture ? document.documentElement : targetElement, renderOptions);
+      job.check();
+      job.stage('3 / 4 · 编码文件', 65);
+      await yieldToBrowser();
+      job.check();
       if (!canvas.width || !canvas.height) throw new Error('导出范围为空，请重新选择');
 
       const cropTopPx = Math.max(0, Math.round(Number(options.cropTop || 0) * scale));
@@ -819,8 +897,8 @@
           canvas.height = 0;
           canvas = padded;
         }
-        await downloadCanvasAsImage(canvas, fileName, outputFormat);
-        showToast(`✅ ${outputFormat.toUpperCase()} ${canvas.width} × ${canvas.height} px · ${scale.toFixed(2)}× · 已开始下载`, 'success', 5000);
+        await downloadCanvasAsImage(canvas, fileName, outputFormat, job);
+        showToast(`✅ ${outputFormat.toUpperCase()} ${canvas.width} × ${canvas.height} px · ${scale.toFixed(2)}× · ${job.elapsed()} s · 已开始下载`, 'success', 5000);
         return true;
       }
 
@@ -847,8 +925,12 @@
         });
         setPdfMetadata(pdf, fileName);
 
-        const imgData = canvas.toDataURL(mimeType, quality);
+        const imgData = await encodeCanvas(canvas, mimeType, quality);
+        job.check();
         pdf.addImage(imgData, format, margins.left, margins.top, contentWidthMm, contentHeightMm, undefined, 'FAST');
+        job.stage('4 / 4 · 开始下载', 100);
+        await yieldToBrowser();
+        job.check();
         pdf.save(fileName);
       } else {
         // 标准 A4 多页分页
@@ -862,7 +944,7 @@
         const pageHeightPx = Math.floor((printHeightMm * canvas.width) / printWidthMm);
         const preferredBreaks = getPreferredPageBreaks(capture ? document.documentElement : targetElement, canvas.height, pageHeightPx, scale, capture ? capture.y : Number(options.cropTop || 0), clonedBoundaries);
 
-        const sliceCanvas = document.createElement('canvas');
+        sliceCanvas = document.createElement('canvas');
         sliceCanvas.width = canvas.width;
         const sliceCtx = sliceCanvas.getContext('2d');
         sliceCtx.imageSmoothingEnabled = true;
@@ -870,10 +952,11 @@
 
         let renderedHeightPx = 0;
         let pageCount = 0;
+        let breakIndex = 0;
 
         while (renderedHeightPx < canvas.height) {
           const remainingPx = canvas.height - renderedHeightPx;
-          const preferredEnd = preferredBreaks.find(end => end > renderedHeightPx);
+          const preferredEnd = preferredBreaks[breakIndex];
           const currentSlicePx = Math.min(
             remainingPx,
             preferredEnd ? preferredEnd - renderedHeightPx : pageHeightPx
@@ -895,26 +978,40 @@
             pdf.addPage();
           }
 
-          const sliceData = sliceCanvas.toDataURL(mimeType, quality);
+          job.stage('3 / 4 · 正在编码第 ' + (pageCount + 1) + ' 页', 65 + 30 * renderedHeightPx / canvas.height);
+          await yieldToBrowser();
+          job.check();
+          const sliceData = await encodeCanvas(sliceCanvas, mimeType, quality);
+          job.check();
           pdf.addImage(sliceData, format, margins.left, margins.top, printWidthMm, currentSliceHeightMm, undefined, 'FAST');
 
           renderedHeightPx += currentSlicePx;
           pageCount++;
+          breakIndex++;
         }
 
+        job.stage('4 / 4 · 开始下载', 100);
+        await yieldToBrowser();
+        job.check();
         pdf.save(fileName);
         sliceCanvas.width = 0;
         sliceCanvas.height = 0;
       }
 
-      showToast(`✅ ${formatUpper} 生成成功，已开始下载！`, 'success', 3000);
+      showToast(`✅ ${formatUpper} 生成成功 · ${job.elapsed()} s · 已开始下载`, 'success', 3000);
       return true;
     } catch (err) {
+      if (job.cancelled || err.name === 'AbortError') {
+        showToast('已取消导出，选区已保留', 'info', 3000);
+        return false;
+      }
       console.error('PDF 生成异常:', err);
       showToast('❌ 生成失败: ' + (err.message || '未知错误'), 'warning', 4000);
       return false;
     } finally {
       isExporting = false;
+      job.close();
+      if (sliceCanvas) { sliceCanvas.width = 0; sliceCanvas.height = 0; }
       scrollLock?.restore();
       scrollPlan?.restore();
       cloneFrame?.remove();
@@ -1024,9 +1121,9 @@
       </div>
       <button type="button" data-action="reset-size" title="恢复为最初识别/选取的尺寸">↺ 原始尺寸</button>
       <div class="wos-region-divider"></div>
-      <button type="button" data-action="export" title="导出此选区 (Enter)">✨ 确认导出</button>
-      <button type="button" data-action="repick" title="重新在页面上选择区块">🎯 重选</button>
-      <button type="button" data-action="cancel" title="取消并退出 (Esc)">✕</button>
+      <button type="button" data-action="export" title="导出此选区 (Enter)">导出文件 ↗</button>
+      <button type="button" data-action="repick" title="重新在页面上选择区块">重选</button>
+      <button type="button" data-action="cancel" aria-label="取消选区" title="取消并退出 (Esc)">✕</button>
     `;
     document.documentElement.append(adjuster, panel);
 
@@ -1471,7 +1568,7 @@
       </button>
 
       <button class="wos-widget-btn secondary" id="wos-btn-pick-export" title="点击自由选择页面任意区域导出">
-        <span>🎯 自由选区</span>
+        <span>手动选区</span>
       </button>
 
       <!-- 紧凑规格徽标 (点击可快速轮换模式) -->
@@ -1562,7 +1659,7 @@
       if (area !== 'local') return;
       if (['pdf', 'png', 'jpeg'].includes(changes.wos_output_format?.newValue)) currentOutputFormat = changes.wos_output_format.newValue;
       if (['a4', 'adaptive', 'continuous'].includes(changes.wos_export_mode?.newValue)) currentExportMode = changes.wos_export_mode.newValue;
-      if ([2, 3, 4].includes(Number(changes.wos_resolution_scale?.newValue))) currentResolutionScale = Number(changes.wos_resolution_scale.newValue);
+      if ([1.5, 2, 3, 4].includes(Number(changes.wos_resolution_scale?.newValue))) currentResolutionScale = Number(changes.wos_resolution_scale.newValue);
       if (typeof changes.wos_lossless_png?.newValue === 'boolean') currentLosslessPng = changes.wos_lossless_png.newValue;
       updateFloatingBadge();
     });

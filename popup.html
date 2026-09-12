@@ -1,52 +1,57 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>网页区域 PDF 导出器</title><link rel="stylesheet" href="popup.css"></head>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Web2PDF · 网页导出工作台</title><link rel="stylesheet" href="popup.css"></head>
 <body>
 <div class="app-container">
 <header class="app-header">
-  <div class="brand-mark" aria-hidden="true">▧</div>
-  <div class="title-wrap"><span class="eyebrow">WEB2PDF / CAPTURE STUDIO</span><h1>网页区域导出</h1></div>
-  <span class="version-badge">v3.5.0</span>
+  <div class="brand-line"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5M8 8h8v8H8z"/></svg></span><span class="wordmark">Web2PDF<span class="edition">WORKSPACE</span></span><span class="version-badge">v3.6.0</span></div>
+  <h1 class="sr-only">网页导出工作台</h1>
+  <div class="page-context"><span class="context-icon" aria-hidden="true">↳</span><span id="page-title">当前网页</span></div>
 </header>
-<div class="page-status" id="page-status" data-state="loading"><span class="status-dot"></span><span id="status-label" role="status" aria-live="polite">正在连接当前页面…</span></div>
+<div class="page-status" id="page-status" data-state="loading"><span class="status-dot" aria-hidden="true"></span><span id="status-label" role="status" aria-live="polite">正在连接当前页面…</span><button id="retry-connect" type="button" hidden>重试</button></div>
 <main class="settings-scroll">
-<section class="config-card" aria-labelledby="output-heading">
-  <div class="section-heading"><h2 id="output-heading"><span>01</span> 输出设置</h2><span id="dpi-badge" class="badge-accent">3× 推荐</span></div>
-  <div id="format-segmented" class="segmented-control format-control" aria-label="导出格式">
-    <button type="button" class="seg-item active" data-format="pdf" aria-pressed="true">PDF<small>打印与归档</small></button>
-    <button type="button" class="seg-item" data-format="png" aria-pressed="false">PNG<small>无损图片</small></button>
-    <button type="button" class="seg-item" data-format="jpeg" aria-pressed="false">JPEG<small>轻量分享</small></button>
+<section class="output-section" aria-labelledby="output-heading">
+  <div class="section-heading"><h2 id="output-heading">导出格式</h2><span class="section-note">01 / OUTPUT</span></div>
+  <div id="format-segmented" class="format-control" role="group" aria-label="导出格式">
+    <button type="button" class="format-item active" data-format="pdf" aria-pressed="true"><span class="file-icon" aria-hidden="true">P</span><strong>PDF</strong><small>文档归档</small><span class="format-check" aria-hidden="true">✓</span></button>
+    <button type="button" class="format-item" data-format="png" aria-pressed="false"><span class="file-icon" aria-hidden="true">N</span><strong>PNG</strong><small>无损图片</small><span class="format-check" aria-hidden="true">✓</span></button>
+    <button type="button" class="format-item" data-format="jpeg" aria-pressed="false"><span class="file-icon" aria-hidden="true">J</span><strong>JPEG</strong><small>轻量分享</small><span class="format-check" aria-hidden="true">✓</span></button>
   </div>
-  <div class="config-row inline-row"><div class="config-label">渲染倍率</div><div id="scale-segmented" class="segmented-control" aria-label="渲染倍率">
-    <button type="button" class="seg-item" data-scale="2">2×</button><button type="button" class="seg-item active" data-scale="3">3×</button><button type="button" class="seg-item" data-scale="4">4×</button>
-  </div></div>
-  <label class="filename-row" for="export-filename"><span>文件名 <small>可选</small></span><input id="export-filename" type="text" maxlength="70" placeholder="默认使用网页标题"></label>
 </section>
-<section class="config-card" aria-labelledby="layout-heading">
-  <div class="section-heading"><h2 id="layout-heading"><span>02</span> 页面与留白</h2><span id="page-size-hint" class="badge-accent">A4 纸张</span></div>
-  <div class="config-row pdf-layout"><div id="mode-segmented" class="segmented-control" aria-label="PDF 页面尺寸">
-    <button type="button" class="seg-item active" data-mode="a4">A4 分页</button><button type="button" class="seg-item" data-mode="adaptive">按选区自适应</button>
-  </div></div>
-  <fieldset class="margin-settings"><legend>四边留白 <span>mm</span></legend>
-    <div class="margin-layout"><div class="paper-preview" aria-hidden="true"><div></div></div>
-    <div class="margin-grid">
-      <label>上<input type="number" data-margin="top" min="0" max="50" step="0.1"></label>
-      <label>下<input type="number" data-margin="bottom" min="0" max="50" step="0.1"></label>
-      <label>左<input type="number" data-margin="left" min="0" max="50" step="0.1"></label>
-      <label>右<input type="number" data-margin="right" min="0" max="50" step="0.1"></label>
+<section class="quality-section" aria-labelledby="quality-heading">
+  <div class="section-heading"><h2 id="quality-heading">速度与清晰度</h2><span id="dpi-badge" class="badge-accent">2× 平衡</span></div>
+  <div class="segmented-control preset-control" role="group" aria-label="导出预设">
+    <button type="button" data-preset="fast"><strong>快速</strong><small>1.5× · 日常分享</small></button>
+    <button type="button" data-preset="balanced" class="active"><strong>平衡</strong><small>2× · 清晰归档</small></button>
+    <button type="button" data-preset="detail"><strong>精细</strong><small>3× · 放大查看</small></button>
+  </div>
+  <p id="quality-hint" class="quality-hint">2× 渲染，在清晰度与处理量之间取得平衡。</p>
+</section>
+<div class="config-row pdf-layout"><div id="mode-segmented" class="segmented-control" role="group" aria-label="PDF 页面尺寸">
+  <button type="button" class="active" data-mode="a4">A4 分页</button><button type="button" data-mode="adaptive">单页自适应</button>
+</div></div>
+<label class="filename-row" for="export-filename"><span>文件名 <small>可选</small></span><input id="export-filename" type="text" maxlength="70" placeholder="使用网页标题" autocomplete="off"></label>
+<details class="advanced-settings">
+  <summary><span>高级设置</span><span id="page-size-hint">A4 纸张</span></summary>
+  <div class="advanced-body">
+    <div class="inline-row"><span class="config-label" id="scale-label">自定义倍率</span><div id="scale-segmented" class="segmented-control" role="group" aria-labelledby="scale-label">
+      <button type="button" data-scale="1.5">1.5×</button><button type="button" data-scale="2">2×</button><button type="button" data-scale="3">3×</button><button type="button" data-scale="4">4×</button>
     </div></div>
-    <div class="margin-footer"><small id="margin-hint">留空用默认值 · 0–50 mm</small><button type="button" id="reset-margins">恢复默认</button></div>
-  </fieldset>
-  <label class="toggle-row"><input type="checkbox" id="opt-lossless-png" checked><span class="toggle-text">PDF 内嵌无损图片</span><small>文件较大</small></label>
-</section>
+    <fieldset class="margin-settings"><legend>四边留白 <span>mm</span></legend>
+      <div class="margin-layout"><div class="paper-preview" aria-hidden="true"><div></div></div><div class="margin-grid">
+        <label>上<input type="number" data-margin="top" min="0" max="50" step="0.1"></label><label>下<input type="number" data-margin="bottom" min="0" max="50" step="0.1"></label>
+        <label>左<input type="number" data-margin="left" min="0" max="50" step="0.1"></label><label>右<input type="number" data-margin="right" min="0" max="50" step="0.1"></label>
+      </div></div>
+      <div class="margin-footer"><small id="margin-hint">留空用默认值 · 0–50 mm</small><button type="button" id="reset-margins">恢复默认</button></div>
+    </fieldset>
+    <label class="toggle-row"><input type="checkbox" id="opt-lossless-png" checked><span>PDF 内嵌无损图片</span><small>文件较大</small></label>
+  </div>
+</details>
 </main>
 <footer class="action-dock">
-  <div class="section-heading"><h2><span>03</span> 选择导出范围</h2><span class="local-note">本地处理</span></div>
-  <div class="hero-actions">
-    <button id="btn-smart-export" disabled class="hero-btn primary"><span>自动识别主体</span><span aria-hidden="true">↗</span></button>
-    <button id="btn-pick-export" disabled class="hero-btn secondary">手动选区</button>
-  </div>
-  <p class="workflow-note">选中区域 → 调整尺寸 → 确认导出</p>
+  <div class="export-summary"><span id="export-summary">PDF · A4 · 2×</span><span class="local-note"><i aria-hidden="true"></i>仅在本地处理</span></div>
+  <div class="hero-actions"><button id="btn-smart-export" disabled class="hero-btn primary"><span>识别正文</span><span aria-hidden="true">↗</span></button><button id="btn-pick-export" disabled class="hero-btn secondary">手动选区</button></div>
+  <p class="workflow-note">确认选区后导出 <span>·</span> PDF 为图片型文档</p>
 </footer>
 </div><script src="popup.js"></script>
 </body></html>

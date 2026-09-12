@@ -1,5 +1,26 @@
 # Changelog
 
+## v3.6.0 - 2026-09-12
+
+### Workspace interface
+- Rebuild the popup with format cards, explicit fast/balanced/detail presets, a persistent export summary, and collapsible advanced controls.
+- Use a shared ink, warm-white and blue visual language across popup, selection controls and progress feedback; remove backdrop blur from page overlays.
+- Keep existing saved preferences; new users start with 2x lossless output. Add 1.5x rendering and a connection retry action.
+
+### Export responsiveness
+- Skip subtree toolbar queries for normal flow elements on non-WOS pages; stop searching once two controls are found.
+- Batch scroll identifier writes after geometry reads; cache repeated smart-selection text reads.
+- Traverse sorted page-break candidates once instead of restarting on every page.
+- Encode PDF image data asynchronously as binary bytes rather than synchronous base64 strings, and yield between pages.
+- Show stage progress and elapsed time; support cooperative cancellation without premature scroll unlock or unexpected downloads.
+- Release temporary page canvases on failure as well as success.
+
+### Validation
+- Real bundled-renderer regression: 32/32 checks passed with a mocked Chrome message boundary.
+- Popup browser regression: 14/14 checks passed with mocked Chrome APIs.
+- Synthetic preprocessing median: 81.1 ms to 54.1 ms; same-quality full PDF timing improved only marginally. See tests/v3.6-validation.md for limits.
+
+
 ## v3.5.0 - 2026-09-11
 
 ### Targeted export reliability

@@ -1,0 +1,475 @@
+{
+  "date": "2026-09-12",
+  "baseCommit": "3ff007cad7590aff5e8832ebebb6f5634adb331b",
+  "scope": "Real Chromium DOM/renderers, mocked Chrome API boundary; not installed-extension E2E",
+  "export": {
+    "passed": 32,
+    "total": 32,
+    "results": [
+      {
+        "name": "custom div drawer detected through title",
+        "pass": true
+      },
+      {
+        "name": "duplicate launch reuses current selection",
+        "pass": true,
+        "details": {
+          "reply": {
+            "success": true,
+            "reused": true,
+            "message": "已保留当前选区"
+          },
+          "instance": "original"
+        }
+      },
+      {
+        "name": "full drawer including tail; ignored nodes and pseudo colors",
+        "pass": true,
+        "details": {
+          "capture": {
+            "width": 800,
+            "height": 2320,
+            "bottom": [
+              0,
+              200,
+              0,
+              255
+            ]
+          },
+          "downloads": [
+            "capture.png"
+          ],
+          "scroll": 200,
+          "height": 800,
+          "frames": 0,
+          "attrs": 0
+        }
+      },
+      {
+        "name": "live scroll, layout and temporary nodes restored",
+        "pass": true,
+        "details": {
+          "capture": {
+            "width": 800,
+            "height": 2320,
+            "bottom": [
+              0,
+              200,
+              0,
+              255
+            ]
+          },
+          "downloads": [
+            "capture.png"
+          ],
+          "scroll": 200,
+          "height": 800,
+          "frames": 0,
+          "attrs": 0
+        }
+      },
+      {
+        "name": "no duplicated filename extension",
+        "pass": true,
+        "details": [
+          "capture.png"
+        ]
+      },
+      {
+        "name": "real multipage PDF without added page numbers",
+        "pass": true,
+        "details": {
+          "pages": 3,
+          "textCalls": 0,
+          "header": "%PDF-1.3"
+        }
+      },
+      {
+        "name": "ordinary article is not promoted to nested table",
+        "pass": true
+      },
+      {
+        "name": "failure retains editable selection",
+        "pass": true
+      },
+      {
+        "name": "retry succeeds",
+        "pass": true
+      },
+      {
+        "name": "narrow viewport toolbar stays visible",
+        "pass": true,
+        "details": {
+          "x": 18.720001220703125,
+          "y": 654.6400146484375,
+          "width": 322.55999755859375,
+          "height": 126.719970703125
+        }
+      },
+      {
+        "name": "mode switch restores manual metadata",
+        "pass": true
+      },
+      {
+        "name": "cancel removes all selection UI",
+        "pass": true
+      },
+      {
+        "name": "clone failure cleans iframe and temporary attributes",
+        "pass": true,
+        "details": {
+          "frames": 0,
+          "attrs": 0
+        }
+      },
+      {
+        "name": "launch rejected while export is pending",
+        "pass": true,
+        "details": {
+          "success": false,
+          "message": "文件正在生成，请等待当前导出完成"
+        }
+      },
+      {
+        "name": "scroll lock during capture",
+        "pass": true,
+        "details": 200
+      },
+      {
+        "name": "scroll unlocked after capture",
+        "pass": true
+      },
+      {
+        "name": "small region display agrees with inputs",
+        "pass": true,
+        "details": {
+          "x": 100,
+          "y": 100,
+          "width": 10,
+          "height": 10
+        }
+      },
+      {
+        "name": "focused bottom handle shrinks without moving top",
+        "pass": true,
+        "details": {
+          "x": 100,
+          "y": 100,
+          "width": 10,
+          "height": 9
+        }
+      },
+      {
+        "name": "keyboard translation preserves width and height",
+        "pass": true,
+        "details": {
+          "x": 99,
+          "y": 100,
+          "width": 10,
+          "height": 9
+        }
+      },
+      {
+        "name": "offscreen selection still has reachable export controls",
+        "pass": true,
+        "details": {
+          "x": 12.637939453125,
+          "y": 728.0706787109375,
+          "width": 504.13037109375,
+          "height": 55.858642578125
+        }
+      },
+      {
+        "name": "small region actual output matches selected pixels",
+        "pass": true,
+        "details": {
+          "width": 20,
+          "height": 18,
+          "bottom": [
+            0,
+            0,
+            0,
+            0
+          ]
+        }
+      },
+      {
+        "name": "intentional non-scrolling clipping remains intact",
+        "pass": true,
+        "details": {
+          "width": 800,
+          "height": 2320,
+          "bottom": [
+            0,
+            200,
+            0,
+            255
+          ]
+        }
+      },
+      {
+        "name": "content version handshake is current",
+        "pass": true,
+        "details": {
+          "isWos": false,
+          "currentMode": "a4",
+          "currentScale": 2,
+          "losslessPng": true,
+          "outputFormat": "pdf",
+          "version": "3.6.0"
+        }
+      },
+      {
+        "name": "png encoded file dimensions and independent margins",
+        "pass": true,
+        "details": {
+          "type": "image/png",
+          "width": 245,
+          "height": 231,
+          "corner": [
+            255,
+            255,
+            255,
+            255
+          ],
+          "center": [
+            0,
+            200,
+            0,
+            255
+          ]
+        }
+      },
+      {
+        "name": "jpeg encoded file dimensions and independent margins",
+        "pass": true,
+        "details": {
+          "type": "image/jpeg",
+          "width": 245,
+          "height": 231,
+          "corner": [
+            255,
+            255,
+            255,
+            255
+          ],
+          "center": [
+            0,
+            200,
+            0,
+            255
+          ]
+        }
+      },
+      {
+        "name": "export shows live stage and elapsed timer",
+        "pass": true
+      },
+      {
+        "name": "cancel waits for active renderer",
+        "pass": true
+      },
+      {
+        "name": "cancel keeps selection without download or leaked clone",
+        "pass": true,
+        "details": {
+          "downloads": 0,
+          "busy": false,
+          "frames": 0,
+          "attrs": 0
+        }
+      },
+      {
+        "name": "cancelled selection can be exported again",
+        "pass": true
+      },
+      {
+        "name": "fast scale produces real lossless PNG at 1.5x",
+        "pass": true,
+        "details": {
+          "type": "image/png",
+          "width": 150,
+          "height": 150,
+          "corner": [
+            0,
+            200,
+            0,
+            255
+          ],
+          "center": [
+            0,
+            200,
+            0,
+            255
+          ]
+        }
+      },
+      {
+        "name": "encoding failure keeps retryable selection and cleans progress",
+        "pass": true
+      },
+      {
+        "name": "real PDF encoding succeeds after retry",
+        "pass": true
+      }
+    ]
+  },
+  "popup": {
+    "passed": 14,
+    "total": 14,
+    "results": [
+      {
+        "name": "fresh preferences use balanced preset",
+        "pass": true
+      },
+      {
+        "name": "primary actions remain in viewport",
+        "pass": true,
+        "details": {
+          "x": 0,
+          "y": 486,
+          "width": 400,
+          "height": 114
+        }
+      },
+      {
+        "name": "fast preset persists scale and PDF encoding together",
+        "pass": true
+      },
+      {
+        "name": "fast preset survives reopening",
+        "pass": true
+      },
+      {
+        "name": "image format hides PDF layout",
+        "pass": true
+      },
+      {
+        "name": "image format hides PDF encoding option",
+        "pass": true
+      },
+      {
+        "name": "margins clamp to supported range",
+        "pass": true
+      },
+      {
+        "name": "reset restores default margin semantics",
+        "pass": true
+      },
+      {
+        "name": "custom scale clears preset selection",
+        "pass": true
+      },
+      {
+        "name": "launch failure offers retry without disabling actions permanently",
+        "pass": true
+      },
+      {
+        "name": "connection retry restores ready state",
+        "pass": true
+      },
+      {
+        "name": "launch uses displayed format, scale and filename",
+        "pass": true,
+        "details": {
+          "action": "preview_smart",
+          "options": {
+            "outputFormat": "pdf",
+            "resolutionScale": 2,
+            "exportMode": "a4",
+            "losslessPng": true,
+            "fileName": "My article",
+            "margins": {
+              "top": null,
+              "bottom": null,
+              "left": null,
+              "right": null
+            }
+          }
+        }
+      },
+      {
+        "name": "stale page script requires refresh",
+        "pass": true
+      },
+      {
+        "name": "short popup keeps actions reachable",
+        "pass": true,
+        "details": {
+          "x": 0,
+          "y": 306,
+          "width": 400,
+          "height": 114
+        }
+      }
+    ]
+  },
+  "preprocessing": [
+    {
+      "version": "before",
+      "samples": [
+        104.39999999990687,
+        81.10000000009313,
+        67.30000000004657,
+        82.29999999981374,
+        78.70000000018626
+      ],
+      "median": 81.10000000009313
+    },
+    {
+      "version": "after",
+      "samples": [
+        62.299999999813735,
+        74.5,
+        54.10000000009313,
+        52.699999999953434,
+        50.89999999990687
+      ],
+      "median": 54.10000000009313
+    }
+  ],
+  "sameQualityPdf": [
+    {
+      "version": "before",
+      "success": true,
+      "ms": 1594.1999999999534,
+      "bytes": 1820111,
+      "pages": 5
+    },
+    {
+      "version": "after",
+      "success": true,
+      "ms": 1559.1999999999534,
+      "bytes": 1820111,
+      "pages": 5
+    },
+    {
+      "version": "before",
+      "success": true,
+      "ms": 1588.5,
+      "bytes": 1820111,
+      "pages": 5
+    },
+    {
+      "version": "after",
+      "success": true,
+      "ms": 1486.7999999998137,
+      "bytes": 1820111,
+      "pages": 5
+    },
+    {
+      "version": "before",
+      "success": true,
+      "ms": 1444.0999999998603,
+      "bytes": 1820111,
+      "pages": 5
+    },
+    {
+      "version": "after",
+      "success": true,
+      "ms": 1569.2999999998137,
+      "bytes": 1820111,
+      "pages": 5
+    }
+  ]
+}

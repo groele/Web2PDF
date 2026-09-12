@@ -1,4 +1,4 @@
-/* 学术 PDF 导出助手 - Content CSS (v3.4.0) */
+/* 学术 PDF 导出助手 - Content CSS (v3.6.0) */
 
 /* --- 浮动操作胶囊 (Floating Widget) --- */
 #wos-pdf-floating-widget {
@@ -9,9 +9,9 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  background: rgba(255, 255, 255, 0.96);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  background: #fffefa;
+
+
   padding: 6px 12px;
   border-radius: 50px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15), 0 2px 6px rgba(37, 99, 235, 0.12);
@@ -68,13 +68,13 @@
 }
 
 .wos-widget-btn.primary {
-  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  background: #2859d8;
   color: #ffffff;
   box-shadow: 0 2px 8px rgba(37, 99, 235, 0.35);
 }
 
 .wos-widget-btn.primary:hover {
-  background: linear-gradient(135deg, #1d4ed8, #1e40af);
+  background: #214bb9;
   box-shadow: 0 4px 12px rgba(37, 99, 235, 0.45);
 }
 
@@ -112,7 +112,7 @@
 .wos-badge-chip:hover {
   background: #eff6ff;
   border-color: #93c5fd;
-  color: #1d4ed8;
+  color: #214bb9;
 }
 
 .wos-widget-divider {
@@ -153,8 +153,8 @@
 .wos-mask-panel {
   position: fixed;
   background: rgba(15, 23, 42, 0.52);
-  backdrop-filter: blur(1.5px);
-  -webkit-backdrop-filter: blur(1.5px);
+
+
   pointer-events: none;
   transition: opacity 0.15s ease;
   will-change: top, left, width, height;
@@ -180,8 +180,8 @@
   padding: 8px 18px;
   border-radius: 999px;
   background: rgba(15, 23, 42, 0.92);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+
+
   border: 1px solid rgba(255, 255, 255, 0.22);
   box-shadow: 0 10px 32px rgba(0, 0, 0, 0.38), 0 2px 8px rgba(0, 0, 0, 0.2);
   color: #ffffff;
@@ -240,7 +240,7 @@
   z-index: 2147483644;
   box-sizing: border-box;
   pointer-events: none;
-  border: 2px solid #2563eb;
+  border: 2px solid #2859d8;
   border-radius: 5px;
   background: rgba(37, 99, 235, 0.08);
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.9), 0 8px 24px rgba(37, 99, 235, 0.25);
@@ -261,7 +261,7 @@
   gap: 6px;
   padding: 5px 11px;
   border-radius: 6px;
-  background: #1d4ed8;
+  background: #214bb9;
   color: #ffffff;
   box-shadow: 0 4px 14px rgba(29, 78, 216, 0.35);
   font: 600 11.5px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -289,7 +289,7 @@
   position: fixed;
   z-index: 2147483645;
   box-sizing: border-box;
-  border: 2px solid #2563eb;
+  border: 2px solid #2859d8;
   border-radius: 4px;
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.9), 0 10px 34px rgba(37, 99, 235, 0.28);
   pointer-events: none;
@@ -328,7 +328,7 @@
   gap: 7px;
   padding: 5px 11px;
   border-radius: 6px;
-  background: #1d4ed8;
+  background: #214bb9;
   color: #ffffff;
   font: 600 11.5px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   letter-spacing: 0.3px;
@@ -367,7 +367,7 @@
   pointer-events: auto;
   touch-action: none;
   box-sizing: border-box;
-  background: #2563eb;
+  background: #2859d8;
   border: 2px solid #ffffff;
   box-shadow: 0 2px 8px rgba(30, 64, 175, 0.45);
   padding: 0;
@@ -375,7 +375,7 @@
   transition: transform 0.1s ease, background 0.15s ease, box-shadow 0.15s ease;
 }
 .wos-region-handle:hover, .wos-region-handle:focus-visible {
-  background: #1d4ed8;
+  background: #214bb9;
   box-shadow: 0 4px 14px rgba(30, 64, 175, 0.6);
   outline: none;
 }
@@ -467,9 +467,9 @@
   gap: 8px;
   padding: 8px 12px;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.97);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  background: #fffefa;
+
+
   border: 1px solid rgba(203, 213, 225, 0.95);
   box-shadow: 0 16px 42px rgba(15, 23, 42, 0.22), 0 2px 8px rgba(0, 0, 0, 0.08);
   color: #1e293b;
@@ -495,14 +495,14 @@
 }
 
 #wos-region-adjuster-panel button[data-action="export"] {
-  background: linear-gradient(135deg, #16a34a, #15803d);
+  background: #2859d8;
   color: #ffffff;
   box-shadow: 0 2px 8px rgba(22, 163, 74, 0.35);
   font-size: 13px;
   padding: 8px 16px;
 }
 #wos-region-adjuster-panel button[data-action="export"]:hover {
-  background: linear-gradient(135deg, #15803d, #166534);
+  background: #214bb9;
   box-shadow: 0 4px 12px rgba(22, 163, 74, 0.45);
   transform: translateY(-1px);
 }
@@ -518,7 +518,7 @@
 
 #wos-region-adjuster-panel button[data-action="reset-size"] {
   background: transparent;
-  color: #2563eb;
+  color: #2859d8;
   padding: 6px 8px;
   font-size: 12px;
 }
@@ -563,8 +563,8 @@
   text-align: center;
 }
 .wos-region-size-inputs input:focus {
-  outline: 2px solid #2563eb;
-  border-color: #2563eb;
+  outline: 2px solid #2859d8;
+  border-color: #2859d8;
 }
 
 /* 模式选择（针对局部滚动区域） */
@@ -638,4 +638,34 @@ body.wos-moving-region { cursor: move !important; }
 @keyframes wosFadeIn {
   from { opacity: 0; transform: scale(0.96); }
   to { opacity: 1; transform: scale(1); }
+}
+
+/* Shared workspace treatment: quiet surfaces, one action color, no blur layers. */
+#wos-pdf-floating-widget{border-radius:12px;max-width:calc(100vw - 24px);flex-wrap:wrap;right:12px;bottom:16px;box-sizing:border-box}
+#wos-pdf-floating-widget:hover{transform:none}
+#wos-pdf-floating-widget .wos-widget-btn{border-radius:7px;min-height:34px;font-size:12px}
+#wos-guidance-banner{background:#182434;border-radius:10px;box-shadow:0 6px 20px #18243426;border:1px solid #43516a;font-size:12px}
+.wos-mask-panel{background:rgba(24,36,52,.36)}
+#wos-region-adjuster-panel{background:#fffefa;border-color:#dce1e8;border-radius:10px;gap:8px;padding:10px;box-shadow:0 8px 32px #18243426;font-size:12px}
+#wos-region-adjuster-panel button{min-height:34px;transition:background .12s}
+#wos-region-adjuster-panel button[data-action="export"]{font-size:12px;box-shadow:none}
+#wos-region-adjuster-panel button[data-action="export"]:hover{transform:none;box-shadow:none}
+#wos-region-adjuster-panel button:disabled{opacity:.45;cursor:not-allowed}
+#wos-region-adjuster-panel button:focus-visible,#wos-pdf-floating-widget button:focus-visible,#wos-export-progress button:focus-visible{outline:2px solid #2859d8;outline-offset:3px}
+.wos-region-hud{background:#182434;border:1px solid #506080;box-shadow:none}
+.wos-region-hud-meta{color:#d0dfff}
+#wos-region-adjuster-panel .wos-region-size-inputs input{height:32px;width:64px;font-size:12px}
+#wos-toast-message{max-width:calc(100vw - 32px);box-sizing:border-box;line-height:1.6;font-size:12px;z-index:2147483647}
+#wos-export-progress{position:fixed;right:20px;bottom:20px;width:320px;max-width:calc(100vw - 32px);max-height:calc(100vh - 32px);overflow:auto;z-index:2147483647;padding:18px;background:#fffefa;color:#182434;border:1px solid #cbd5e1;border-radius:12px;box-shadow:0 12px 40px #18243433;box-sizing:border-box;font:12px/1.5 "Segoe UI","Microsoft YaHei",sans-serif}
+#wos-export-progress *{box-sizing:border-box}
+#wos-export-progress .wos-progress-heading{display:flex;align-items:center;justify-content:space-between}
+#wos-export-progress strong{font-size:14px}
+#wos-export-progress .wos-progress-time{font:12px Consolas,monospace;color:#5c6777;font-variant-numeric:tabular-nums}
+#wos-export-progress .wos-progress-track{height:3px;background:#e7ebf2;margin:14px 0 10px;overflow:hidden;border-radius:3px}
+#wos-export-progress .wos-progress-track i{display:block;width:0;height:100%;background:#2859d8;transition:width .2s}
+#wos-export-progress p{font:inherit;margin:0 0 12px;color:#5c6777}
+#wos-export-progress button{border:1px solid #dce1e8;background:white;color:#182434;border-radius:6px;padding:7px 12px;cursor:pointer;font:inherit}
+#wos-export-progress button:disabled{opacity:.5;cursor:wait}
+@media(prefers-reduced-motion:reduce){
+ #wos-pdf-floating-widget,#wos-guidance-banner,#wos-region-adjuster-panel,#wos-toast-message,.wos-region-handle,#wos-export-progress *{animation:none!important;transition:none!important}
 }
