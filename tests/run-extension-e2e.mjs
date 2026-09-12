@@ -147,6 +147,8 @@ try {
     '--remote-debugging-address=127.0.0.1',
     '--remote-debugging-port=' + debuggerPort,
     '--disable-gpu',
+    '--enable-extensions',
+    '--enable-logging=stderr',
     '--no-first-run',
     '--no-default-browser-check',
     '--disable-extensions-except=' + baseDir,
@@ -180,6 +182,8 @@ try {
   await pageClient.send('Page.navigate', { url: fixtureUrl });
   await waitFor(async () => evaluate(pageClient, "document.readyState === 'complete'"), 'Fixture did not finish its extension-aware navigation');
 
+  const injectionContext = await evaluate(pageClient, "({ href: location.href, title: document.title, hasArticle: Boolean(document.querySelector('article.main-record')) })");
+  console.log('Injection context:', JSON.stringify(injectionContext));
   await waitFor(async () => evaluate(pageClient, "Boolean(document.querySelector('#wos-pdf-floating-widget'))"), 'Installed extension did not inject its toolbar');
   const initial = await evaluate(pageClient, `({
     title: document.title,
