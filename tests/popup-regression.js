@@ -9,7 +9,7 @@ async (browserPage) => {
     await page.addInitScript(() => {
       window.sent = [];
       window.chrome = {
-        runtime:{getManifest:()=>({version:'3.6.0'})},
+        runtime:{getManifest:()=>({version:'4.0.0'})},
         storage:{local:{
           get:async()=>JSON.parse(sessionStorage.getItem('prefs') || '{}'),
           set:async values=>sessionStorage.setItem('prefs',JSON.stringify(values))
@@ -18,7 +18,7 @@ async (browserPage) => {
           query:async()=>[{id:1,title:'Research article',url:'https://example.org/article'}],
           sendMessage:async(id,msg)=>{
             window.sent.push(msg);
-            if (msg.action === 'check_status') return {version:window.stale ? '3.5.0' : '3.6.0'};
+            if (msg.action === 'check_status') return {version:window.stale ? '3.5.0' : '4.0.0'};
             if (window.launchError) throw new Error('Test connection failed');
             return {success:true};
           }
@@ -67,8 +67,32 @@ async (browserPage) => {
     await page.locator('#btn-smart-export').click();
     check('stale page script requires refresh', (await page.locator('#status-label').innerText()).includes('旧版'));
     await page.setViewportSize({width:400,height:420});
+    await page.locator('.action-dock').scrollIntoViewIfNeeded();
     const compactFooter = await page.locator('.action-dock').boundingBox();
     check('short popup keeps actions reachable', compactFooter.y >= 0 && compactFooter.y + compactFooter.height <= 420, compactFooter);
+    await page.setViewportSize({width:400,height:273});
+    await page.locator('.action-dock').scrollIntoViewIfNeeded();
+    const constrainedLayout = await page.evaluate(() => {
+      const settings = document.querySelector('.settings-scroll');
+      const footer = document.querySelector('.action-dock').getBoundingClientRect();
+      const firstFormat = document.querySelector('.format-item').getBoundingClientRect();
+      const settingsBox = settings.getBoundingClientRect();
+      settings.scrollTop = settings.scrollHeight;
+      return {
+        documentWidth: document.documentElement.scrollWidth,
+        viewportWidth: innerWidth,
+        settingsHeight: settingsBox.height,
+        settingsCanScroll: settings.scrollHeight > settings.clientHeight && settings.scrollTop > 0,
+        formatInsideSettings: firstFormat.left >= settingsBox.left && firstFormat.right <= settingsBox.right,
+        footerTop: footer.top,
+        footerBottom: footer.bottom,
+        viewportHeight: innerHeight
+      };
+    });
+    check('constrained popup has no horizontal overflow', constrainedLayout.documentWidth <= constrainedLayout.viewportWidth, constrainedLayout);
+    check('popup intrinsic height does not collapse with the initial viewport', await page.locator('.app-container').evaluate(el => el.offsetHeight) === 600);
+    check('constrained popup leaves a usable settings viewport', constrainedLayout.settingsHeight >= 60 && constrainedLayout.settingsCanScroll, constrainedLayout);
+    check('constrained popup keeps format controls and actions reachable', constrainedLayout.formatInsideSettings && constrainedLayout.footerTop >= 0 && constrainedLayout.footerBottom <= constrainedLayout.viewportHeight, constrainedLayout);
     return {passed:results.filter(r=>r.pass).length,total:results.length,results};
   } finally { await page.close(); }
 }

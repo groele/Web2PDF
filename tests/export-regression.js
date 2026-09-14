@@ -124,10 +124,14 @@ async (page) => {
   await page.waitForFunction(() => typeof window.releaseCapture === 'function');
   await page.evaluate(opts => window.message({ action: 'start_picker', options: opts }, null, reply => window.pendingReply = reply), options);
   check('launch rejected while export is pending', (await page.evaluate(() => window.pendingReply))?.success === false, await page.evaluate(() => window.pendingReply));
+  // The progress overlay intentionally intercepts pointer events during capture.
+  await page.locator('main').hover({ force: true });
+  await page.mouse.wheel(0, 500);
+  await page.keyboard.press('PageDown');
   await page.evaluate(() => document.querySelector('main').scrollTop = 350);
   await page.waitForTimeout(100);
   const lockedScroll = await page.locator('main').evaluate(el => el.scrollTop);
-  check('scroll lock during capture', lockedScroll === 200, lockedScroll);
+  check('wheel, keyboard and programmatic scroll stay locked during capture', lockedScroll === 200, lockedScroll);
   await page.evaluate(() => window.releaseCapture());
   await page.waitForFunction(() => !document.querySelector('#wos-region-adjuster-panel'));
   await page.locator('main').evaluate(el => el.scrollTop = 350);
@@ -163,7 +167,7 @@ async (page) => {
   state = await page.evaluate(() => window.capture);
   check('intentional non-scrolling clipping remains intact', state.width === 800 && state.height === 2320, state);
   state = await page.evaluate(() => new Promise(resolve => window.message({ action: 'check_status' }, null, resolve)));
-  check('content version handshake is current', state.version === '3.6.0', state);
+  check('content version handshake is current', state.version === '4.0.0', state);
   for (const format of ['png', 'jpeg']) {
     await setup('<style>body{margin:0}article{margin:100px;width:100px;height:100px;background:rgb(0,200,0)}</style><article></article>');
     await pick('article', { ...options, outputFormat: format, margins: { top: 1, bottom: 3, left: 2, right: 4 } });

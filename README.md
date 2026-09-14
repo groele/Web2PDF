@@ -1,6 +1,6 @@
 # 网页区域 PDF 导出器
 
-当前版本：**v3.6.0**。Chrome / Edge 扩展，使用内置 html2canvas 与 jsPDF 在本地生成 PDF、PNG 或 JPEG。
+当前版本：**v4.0.0**。Chrome / Edge 扩展，使用内置 html2canvas 与 jsPDF 在本地生成 PDF、PNG 或 JPEG。
 
 ## 使用流程
 
@@ -35,7 +35,7 @@
 
 ## 回归验证
 
-`tests/export-regression.js` 是用于已连接 Playwright 浏览器的回归函数，使用内置真实渲染器，模拟扩展消息接口。先在项目目录运行 `python -m http.server 8765 --bind 127.0.0.1`，再由浏览器工具执行该文件。测试不等同于真实登录 WOS 页面及已安装扩展的端到端验收。手动侧栏示例位于 `tests/scroll-sidebar.html`。`tests/popup-regression.js` 检查预设、存储、连接重试及紧凑视口。v3.6.0 验证与性能边界见 [验证记录](tests/v3.6-validation.md)。
+`tests/export-regression.js` 是用于已连接 Playwright 浏览器的回归函数，使用内置真实渲染器，模拟扩展消息接口。先在项目目录运行 `python -m http.server 8765 --bind 127.0.0.1`，再由浏览器工具执行该文件。测试不等同于真实登录 WOS 页面及已安装扩展的端到端验收。手动侧栏示例位于 `tests/scroll-sidebar.html`。`tests/popup-regression.js` 检查预设、存储、连接重试及紧凑视口。v4.0.0 发布与验证范围见 [版本说明](docs/releases/v4.0.0.md)，历史性能边界见 [验证记录](tests/v3.6-validation.md)。
 
 ## 安装与更新
 

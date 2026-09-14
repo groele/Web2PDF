@@ -1,9 +1,9 @@
 /**
- * 网页区域 PDF 导出器 - Content Script (v3.6.0)
+ * 网页区域 PDF 导出器 - Content Script (v4.0.0)
  */
 
 (function () {
-  const CONTENT_VERSION = '3.6.0';
+  const CONTENT_VERSION = '4.0.0';
   if (window.__WOS_PDF_EXPORTER_INITIALIZED__) return;
   window.__WOS_PDF_EXPORTER_INITIALIZED__ = true;
   window.__WOS_PDF_EXPORTER_VERSION__ = CONTENT_VERSION;
@@ -678,9 +678,16 @@
       }
     }
     for (const [element, position] of positions) element.setAttribute(attribute, position.id);
-    const prevent = event => { if (event.cancelable) event.preventDefault(); };
+    const prevent = event => {
+      if (event.cancelable) event.preventDefault();
+      event.stopImmediatePropagation();
+      event.stopPropagation();
+    };
     const keydown = event => {
-      if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','PageUp','PageDown','Home','End',' '].includes(event.key)) prevent(event);
+      if (!['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','PageUp','PageDown','Home','End',' '].includes(event.key)) return;
+      // Keep the progress dialog's keyboard-accessible cancel action working.
+      if (event.key === ' ' && event.target?.closest?.('#wos-export-progress button')) return;
+      prevent(event);
     };
     const keepPosition = event => {
       const element = event.target;
@@ -836,10 +843,11 @@
     const job = createExportJob();
     isExporting = true;
     try {
+      // Freeze synchronously when export starts, before the first async yield.
+      scrollLock = freezeCaptureScroll();
       job.stage('1 / 4 · 准备页面与图片', 10);
       await yieldToBrowser();
       job.check();
-      scrollLock = freezeCaptureScroll();
       const saved = options.margins === undefined && typeof chrome !== 'undefined' && chrome.storage?.local
         ? (await chrome.storage.local.get(['wos_margins'])).wos_margins : options.margins;
       margins = Object.fromEntries(Object.entries(defaults).map(([edge, fallback]) => {

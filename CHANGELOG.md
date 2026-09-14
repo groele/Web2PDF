@@ -1,5 +1,22 @@
 # Changelog
 
+## v4.0.0 - 2026-09-14
+
+### Fixed
+- Give the popup a stable 600px intrinsic height instead of a self-referential viewport cap that could collapse its settings area.
+- Keep settings scrollable and export actions reachable on constrained viewports.
+- Freeze capture scroll before the first asynchronous yield; prevent wheel and navigation-key handlers from moving the page while preserving keyboard cancellation.
+
+### Release scope
+- Include the workspace interface and export responsiveness changes documented under v3.6.0.
+- Preserve saved preferences and existing PDF/PNG/JPEG output formats; no configuration migration is required.
+- This major version number is explicitly requested for the release; no intentional breaking configuration change is introduced.
+
+### Validation
+- Popup browser regression: 18/18 checks passed with mocked Chrome APIs.
+- Bundled-renderer export regression: 32/32 checks passed with a mocked extension message boundary.
+- See docs/releases/v4.0.0.md for the release validation scope.
+
 ## v3.6.0 - 2026-09-12
 
 ### Workspace interface

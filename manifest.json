@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "网页区域 PDF 导出器",
   "short_name": "区域 PDF 导出",
-  "version": "3.6.0",
+  "version": "4.0.0",
   "description": "网页与学术文献区域高保真 PDF 导出：支持自动识别主体、自选区域、自适应清晰度与安全 A4 分页。",
   "icons": {
     "16": "icons/icon16.png",
